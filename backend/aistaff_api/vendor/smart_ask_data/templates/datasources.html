@@ -1,0 +1,1150 @@
+{% raw %}
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>数据源管理 - 广东省消防救援总队数据治理（2024）项目</title>
+
+    <link href="static/vendor/ant-design-vue/reset.css" rel="stylesheet" />
+    <link href="static/app_shell.css" rel="stylesheet" />
+    <script src="static/vendor/vue/vue.global.prod.js"></script>
+    <script src="static/vendor/dayjs/dayjs.min.js"></script>
+    <script src="static/vendor/dayjs/plugin/advancedFormat.js"></script>
+    <script src="static/vendor/dayjs/plugin/customParseFormat.js"></script>
+    <script src="static/vendor/dayjs/plugin/quarterOfYear.js"></script>
+    <script src="static/vendor/dayjs/plugin/weekday.js"></script>
+    <script src="static/vendor/dayjs/plugin/localeData.js"></script>
+    <script src="static/vendor/dayjs/plugin/weekOfYear.js"></script>
+    <script src="static/vendor/dayjs/plugin/weekYear.js"></script>
+    <script>
+      if (window.dayjs_plugin_advancedFormat) dayjs.extend(window.dayjs_plugin_advancedFormat);
+      if (window.dayjs_plugin_customParseFormat) dayjs.extend(window.dayjs_plugin_customParseFormat);
+      if (window.dayjs_plugin_quarterOfYear) dayjs.extend(window.dayjs_plugin_quarterOfYear);
+      if (window.dayjs_plugin_weekday) dayjs.extend(window.dayjs_plugin_weekday);
+      if (window.dayjs_plugin_localeData) dayjs.extend(window.dayjs_plugin_localeData);
+      if (window.dayjs_plugin_weekOfYear) dayjs.extend(window.dayjs_plugin_weekOfYear);
+      if (window.dayjs_plugin_weekYear) dayjs.extend(window.dayjs_plugin_weekYear);
+    </script>
+    <script src="static/vendor/ant-design-vue/antd-with-locales.min.js"></script>
+    <script src="static/vendor/xlsx/xlsx.full.min.js"></script>
+
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --text: #0f172a;
+        --muted: #64748b;
+        --border: rgba(15, 23, 42, 0.10);
+        --surface: rgba(255, 255, 255, 0.82);
+        --surface2: rgba(255, 255, 255, 0.62);
+        --shadow: 0 18px 60px rgba(15, 23, 42, 0.12);
+        --shadow-sm: 0 14px 42px rgba(15, 23, 42, 0.10);
+        --radius: 16px;
+        --primary: #2563eb;
+        --primary2: #06b6d4;
+        --accent: #22c55e;
+      }
+
+      [v-cloak] { display: none; }
+      .boot-loading {
+        flex: 1;
+        min-width: 0;
+        margin: 18px;
+        border-radius: 16px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: var(--shadow);
+        height: calc(100vh - 74px - 36px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        font-size: 13px;
+      }
+      #app:not([v-cloak]) + .boot-loading { display: none; }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(1200px circle at 10% -10%, rgba(37, 99, 235, 0.14) 0%, rgba(37, 99, 235, 0) 60%),
+          radial-gradient(900px circle at 100% 0%, rgba(6, 182, 212, 0.10) 0%, rgba(6, 182, 212, 0) 55%),
+          linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      .app { min-height: 100vh; display: flex; flex-direction: column; }
+
+      .header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        height: 72px;
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+      }
+      .header::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--primary) 0%, var(--primary2) 55%, var(--accent) 100%);
+      }
+      .header > * { position: relative; }
+
+      .brand { display: flex; align-items: center; gap: 12px; }
+      .logo {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary2) 100%);
+        box-shadow: 0 16px 36px rgba(79, 70, 229, 0.28);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        color:#fff;
+        font-weight: 900;
+        letter-spacing: 0.6px;
+      }
+      .brand-title { font-weight: 800; color: var(--text); letter-spacing: 0.2px; }
+      .muted { color: var(--muted); font-size: 12px; }
+
+      .main {
+        flex: 1;
+        width: min(1300px, 100%);
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+        padding: 18px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+      }
+      .card-hd {
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        display:flex;
+        align-items:center;
+        justify-content: space-between;
+        background: rgba(255, 255, 255, 0.62);
+      }
+      .card-bd { padding: 16px; }
+
+      .ds-list { display:flex; flex-direction:column; gap: 10px; }
+      .ds-item {
+        display:flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.72);
+        transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+      }
+      .ant-checkbox-wrapper:hover .ds-item {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.10);
+      }
+      .ant-checkbox-wrapper-checked .ds-item {
+        border-color: rgba(37, 99, 235, 0.35);
+        box-shadow: 0 16px 36px rgba(37, 99, 235, 0.14);
+      }
+      .ds-title { font-weight: 750; display:flex; align-items:center; gap: 8px; }
+      .badge {
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(37, 99, 235, 0.08);
+        color: var(--primary);
+        border: 1px solid rgba(37, 99, 235, 0.18);
+      }
+      .ds-desc { color: var(--muted); font-size: 12px; }
+      .ds-skel { height: 64px; border-radius: 14px; background: linear-gradient(90deg, rgba(15,23,42,0.04) 0%, rgba(15,23,42,0.08) 35%, rgba(15,23,42,0.04) 70%); background-size: 200% 100%; animation: shimmer 1.1s infinite; border: 1px solid rgba(15,23,42,0.08); }
+
+      .kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+      .kpi {
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--border);
+        box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+        transition: transform .12s ease, border-color .12s ease;
+      }
+      .kpi:hover { transform: translateY(-1px); border-color: rgba(37, 99, 235, 0.25); }
+      .kpi-label { color: var(--muted); font-size: 12px; display:flex; align-items:center; justify-content:space-between; gap: 8px; }
+      .kpi-value { font-size: 18px; font-weight: 900; letter-spacing: .2px; margin-top: 6px; }
+      .kpi-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+      .kpi-skeleton { height: 54px; border-radius: 14px; background: linear-gradient(90deg, rgba(15,23,42,0.04) 0%, rgba(15,23,42,0.08) 35%, rgba(15,23,42,0.04) 70%); background-size: 200% 100%; animation: shimmer 1.1s infinite; border: 1px solid rgba(15,23,42,0.08); }
+      @keyframes shimmer { 0% { background-position: 0% 0; } 100% { background-position: -200% 0; } }
+
+      .examples { display:flex; flex-wrap: wrap; gap: 8px; }
+      .ex-tag { cursor: pointer; border-radius: 999px; user-select: none; }
+      .ex-tag:hover { color: var(--primary); border-color: rgba(37, 99, 235, 0.28); }
+      .tag-skel { height: 28px; border-radius: 999px; background: linear-gradient(90deg, rgba(15,23,42,0.04) 0%, rgba(15,23,42,0.08) 35%, rgba(15,23,42,0.04) 70%); background-size: 200% 100%; animation: shimmer 1.1s infinite; border: 1px solid rgba(15,23,42,0.08); }
+
+      .ant-btn { border-radius: 12px; }
+      .ant-btn-primary {
+        border: none;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary2) 100%);
+      }
+      .ant-btn-default {
+        background: rgba(255, 255, 255, 0.82);
+        border-color: rgba(15, 23, 42, 0.14);
+        color: var(--text);
+      }
+      .ant-input, .ant-input-affix-wrapper { border-radius: 12px; }
+      .ant-input, .ant-input-affix-wrapper {
+        background: rgba(255, 255, 255, 0.82);
+        border-color: rgba(15, 23, 42, 0.14);
+        color: var(--text);
+      }
+      .ant-tag {
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        border-color: rgba(15, 23, 42, 0.12);
+        color: var(--text);
+      }
+
+      @media (max-width: 1100px) {
+        .main { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="side-brand">
+          <div class="side-logo" data-brand="sideLogo">粤消</div>
+          <div>
+            <div class="side-title" data-brand="projectName">广东省消防救援总队数据治理（2024）项目</div>
+          </div>
+        </div>
+        <nav class="side-nav">
+          <a class="side-link" href="./"><span>智能问数</span><span class="side-badge">AI</span></a>
+          <a class="side-link active" href="./datasources"><span>数据源</span><span class="side-badge">DATA</span></a>
+          <a class="side-link" href="./data-dev"><span>数据开发</span><span class="side-badge">DEV</span></a>
+          <a class="side-link" href="./dashboard"><span>图表大屏</span><span class="side-badge">BI</span></a>
+        </nav>
+      </aside>
+      <div id="app" class="app shell-content" v-cloak>
+      <div class="header">
+        <div class="brand">
+          <div class="logo" data-brand="headerLogo">{{ brand.headerLogo }}</div>
+          <div>
+            <div class="brand-title">数据源管理</div>
+            <div class="muted" data-brand="projectName">{{ brand.projectName }}</div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap: 12px;">
+          <a-button type="default" @click="openChat">返回问数</a-button>
+          <template v-if="me">
+            <a-tag color="geekblue">{{ me.username }}</a-tag>
+            <a-tag>{{ me.role }}</a-tag>
+            <a-button type="default" @click="showLogin=true">切换账号</a-button>
+            <a-button type="text" @click="logout">退出</a-button>
+          </template>
+          <template v-else>
+            <a-button type="primary" @click="showLogin=true">登录</a-button>
+          </template>
+        </div>
+      </div>
+
+      <div class="main">
+        <div class="card">
+          <div class="card-hd">
+            <span style="font-weight:600;">数据源管理</span>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <a-button type="link" @click="refreshDataSources">刷新</a-button>
+              <a-dropdown>
+                <a-button size="small" type="primary" :disabled="!me">数据接入</a-button>
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item @click="showAddSource=true">新增数据源</a-menu-item>
+                    <a-menu-item @click="showAddTable=true">新建空表</a-menu-item>
+                    <a-menu-item @click="showUploadTable=true">导入Excel/CSV</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+            </div>
+          </div>
+          <div class="card-bd">
+            <div class="muted" style="margin-bottom:10px;">上传表格会自动生成可查询的数据表，回到智能问数可直接提问。</div>
+            <template v-if="dataSources.length">
+              <a-checkbox-group v-model:value="selectedDataSources" class="ds-list" :disabled="!me">
+                <a-checkbox v-for="ds in dataSources" :key="ds.id" :value="ds.id">
+                  <div class="ds-item">
+                    <div class="ds-title">
+                      <span>{{ ds.name }}</span>
+                      <span v-if="ds.row_count !== null && ds.row_count !== undefined" class="badge">{{ ds.row_count }}条</span>
+                    </div>
+                    <div class="ds-desc">{{ ds.description }}</div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap: 8px;">
+                      <span class="muted">表：{{ (ds.tables || []).join(", ") || "—" }}</span>
+                      <a-button
+                        size="small"
+                        danger
+                        type="text"
+                        :disabled="ds.is_default"
+                        @click.stop="confirmDeleteDatasource(ds)"
+                      >删除</a-button>
+                    </div>
+                  </div>
+                </a-checkbox>
+              </a-checkbox-group>
+            </template>
+            <template v-else>
+              <div class="ds-list">
+                <div class="ds-skel" v-for="i in 4" :key="i"></div>
+              </div>
+            </template>
+
+            <div style="margin-top:16px;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <div style="font-weight:700;">数据概览</div>
+                <a-button size="small" type="link" @click="refreshMetrics" :loading="metricsLoading">刷新</a-button>
+              </div>
+              <div class="kpi-grid" v-if="metrics">
+                <div class="kpi">
+                  <div class="kpi-label"><span>火警总量</span><span class="badge">全部</span></div>
+                  <div class="kpi-value">{{ metrics.alarm_total }}</div>
+                  <div class="kpi-sub">累计记录数</div>
+                </div>
+                <div class="kpi">
+                  <div class="kpi-label"><span>近7天火警</span><span class="badge">7d</span></div>
+                  <div class="kpi-value">{{ metrics.alarm_7d }}</div>
+                  <div class="kpi-sub">近一周新增</div>
+                </div>
+                <div class="kpi">
+                  <div class="kpi-label"><span>今日未处理</span><span class="badge">待办</span></div>
+                  <div class="kpi-value">{{ metrics.alarm_unprocessed_today }}</div>
+                  <div class="kpi-sub">需要跟进</div>
+                </div>
+              </div>
+              <div class="kpi-grid" v-else>
+                <div class="kpi-skeleton" v-for="i in 3" :key="i"></div>
+              </div>
+            </div>
+
+            <div style="margin-top:16px;">
+              <div style="font-weight:600; margin-bottom:8px;">示例提问</div>
+              <template v-if="examples.length">
+                <div class="examples">
+                  <a-tag v-for="ex in examples" :key="ex" class="ex-tag" @click="fillExample(ex)">{{ ex }}</a-tag>
+                </div>
+              </template>
+              <template v-else>
+                <div class="examples">
+                  <div class="tag-skel" v-for="i in 6" :key="i" :style="{ width: (90 + (i%3)*40) + 'px' }"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <a-modal v-model:open="showLogin" title="登录" :footer="null" :maskClosable="false">
+        <a-form layout="vertical" :model="login" @finish="doLogin">
+          <a-form-item label="用户名" name="username" :rules="[{ required: true, message: '请输入用户名' }]">
+            <a-input v-model:value="login.username"></a-input>
+          </a-form-item>
+          <a-form-item label="密码" name="password" :rules="[{ required: true, message: '请输入密码' }]">
+            <a-input-password v-model:value="login.password"></a-input-password>
+          </a-form-item>
+          <div class="muted" v-if="loginError" style="color:#dc2626; margin-bottom: 10px;">{{ loginError }}</div>
+          <div style="display:flex; justify-content:flex-end; gap: 8px;">
+            <a-button @click="showLogin=false">取消</a-button>
+            <a-button type="primary" html-type="submit" :loading="busy">登录</a-button>
+          </div>
+        </a-form>
+      </a-modal>
+
+      <a-modal v-model:open="showAddSource" title="新增数据源" :footer="null" :maskClosable="false">
+        <a-form layout="vertical">
+          <a-form-item label="数据源ID">
+            <a-input v-model:value="addSource.id" placeholder="仅字母/数字/下划线" />
+          </a-form-item>
+          <a-form-item label="名称">
+            <a-input v-model:value="addSource.name" placeholder="如：交通专题库" />
+          </a-form-item>
+          <a-form-item label="描述">
+            <a-input v-model:value="addSource.description" placeholder="可选" />
+          </a-form-item>
+          <a-form-item label="数据库类型">
+            <a-select v-model:value="addSource.db_type" :options="dbTypeOptions" />
+          </a-form-item>
+          <a-form-item label="连接地址" v-if="addSource.db_type !== 'sqlite'">
+            <a-input
+              v-model:value="addSource.db_url"
+              placeholder="mysql+pymysql://user:pass@host:3306/db 或 postgresql+psycopg://user:pass@host:5432/db"
+            />
+          </a-form-item>
+          <a-form-item label="数据库路径（SQLite）" v-if="addSource.db_type === 'sqlite'">
+            <a-input v-model:value="addSource.db_path" placeholder="留空使用默认库 demo.db" />
+          </a-form-item>
+          <a-form-item label="表名（逗号分隔）">
+            <a-input v-model:value="addSource.tablesText" placeholder="table_a, table_b" />
+          </a-form-item>
+        </a-form>
+        <div class="muted">提示：SQLite 使用本机文件路径；MySQL/PG 请填写连接地址。</div>
+        <div style="display:flex; justify-content:flex-end; gap: 8px; margin-top: 12px;">
+          <a-button @click="showAddSource=false">取消</a-button>
+          <a-button type="primary" :loading="addSourceLoading" @click="submitAddSource">保存</a-button>
+        </div>
+      </a-modal>
+
+      <a-modal v-model:open="showAddTable" title="新增表格" :footer="null" :maskClosable="false">
+        <a-form layout="vertical">
+          <a-form-item label="数据源ID">
+            <a-input v-model:value="addTable.datasourceId" placeholder="新增或已有数据源ID" />
+          </a-form-item>
+          <a-form-item label="名称（新数据源可填）">
+            <a-input v-model:value="addTable.datasourceName" placeholder="可选" />
+          </a-form-item>
+          <a-form-item label="描述（新数据源可填）">
+            <a-input v-model:value="addTable.datasourceDescription" placeholder="可选" />
+          </a-form-item>
+          <a-form-item label="数据库路径（SQLite）">
+            <a-input v-model:value="addTable.dbPath" placeholder="留空使用默认库 demo.db" />
+          </a-form-item>
+          <a-form-item label="表名">
+            <a-input v-model:value="addTable.tableName" placeholder="例如：traffic_event" />
+          </a-form-item>
+          <a-form-item label="字段定义（每行 name:type）">
+            <a-textarea
+              v-model:value="addTable.columnsText"
+              :auto-size="{minRows:4,maxRows:8}"
+              placeholder="id:TEXT&#10;name:TEXT&#10;count:INTEGER"
+            />
+          </a-form-item>
+          <a-form-item label="示例数据（JSON数组，可空）">
+            <a-textarea
+              v-model:value="addTable.rowsText"
+              :auto-size="{minRows:3,maxRows:8}"
+              placeholder='[{"id":"A1","name":"样例","count":12}]'
+            />
+          </a-form-item>
+        </a-form>
+        <div class="muted">字段类型支持：TEXT/INTEGER/REAL/NUMERIC/BLOB。</div>
+        <div style="display:flex; justify-content:flex-end; gap: 8px; margin-top: 12px;">
+          <a-button @click="showAddTable=false">取消</a-button>
+          <a-button type="primary" :loading="addTableLoading" @click="submitAddTable">保存</a-button>
+        </div>
+      </a-modal>
+
+      <a-modal v-model:open="showUploadTable" title="上传表格" :footer="null" :maskClosable="false" width="720">
+        <a-form layout="vertical">
+          <a-form-item label="数据源ID">
+            <a-input v-model:value="uploadTable.datasourceId" placeholder="新增或已有数据源ID" />
+          </a-form-item>
+          <a-form-item label="名称（新数据源可填）">
+            <a-input v-model:value="uploadTable.datasourceName" placeholder="可选" />
+          </a-form-item>
+          <a-form-item label="描述（新数据源可填）">
+            <a-input v-model:value="uploadTable.datasourceDescription" placeholder="可选" />
+          </a-form-item>
+          <a-form-item label="数据库路径（SQLite）">
+            <a-input v-model:value="uploadTable.dbPath" placeholder="留空使用默认库 demo.db" />
+          </a-form-item>
+          <a-form-item label="表名">
+            <a-input v-model:value="uploadTable.tableName" placeholder="例如：traffic_event" />
+          </a-form-item>
+          <a-form-item label="选择文件（Excel/CSV）">
+            <input type="file" accept=".xlsx,.xls,.csv" @change="handleUploadFileChange" />
+          </a-form-item>
+          <a-form-item label="Sheet（Excel 可选）">
+            <a-select
+              v-model:value="uploadTable.sheetName"
+              :options="uploadSheetOptions"
+              :disabled="uploadSheetOptions.length<=1"
+              @change="onUploadSheetChange"
+              placeholder="默认第一张"
+            />
+          </a-form-item>
+          <a-form-item label="最大导入行数">
+            <a-input-number v-model:value="uploadTable.maxRows" :min="1" :max="20000" style="width:160px;" />
+          </a-form-item>
+        </a-form>
+        <div class="muted">字段名会自动清洗为字母/数字/下划线；建议表名使用英文或下划线。</div>
+        <div v-if="uploadPreviewRows.length" style="margin-top: 12px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <div style="font-weight:650;">预览（前5行）</div>
+            <a-tag>{{ uploadRows.length }} 行</a-tag>
+          </div>
+          <a-table
+            size="small"
+            :columns="uploadPreviewColumns"
+            :data-source="uploadPreviewRows"
+            :pagination="false"
+            :scroll="{ x: 'max-content' }"
+            row-key="__idx"
+          ></a-table>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap: 8px; margin-top: 12px;">
+          <a-button @click="showUploadTable=false">取消</a-button>
+          <a-button type="primary" :loading="uploadTableLoading" @click="submitUploadTable">导入</a-button>
+        </div>
+      </a-modal>
+    </div>
+    <div class="boot-loading">加载中…</div>
+    </div>
+
+    <script>
+      const { createApp, ref, computed, nextTick, onMounted, watch } = Vue;
+
+      function apiFetch(path, options = {}) {
+        return fetch(new URL("api" + path, window.location.href), {
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        }).then(async (r) => {
+          const text = await r.text();
+          let json = null;
+          try { json = text ? JSON.parse(text) : null; } catch {}
+          if (!r.ok) {
+            if (r.status === 401) {
+              try { window.dispatchEvent(new CustomEvent("smartask-auth-required")); } catch {}
+            }
+            const msg = (json && (json.detail || json.message)) || text || `HTTP ${r.status}`;
+            throw new Error(msg);
+          }
+          return json;
+        });
+      }
+
+      const BRAND_STORAGE_KEY = "smartask_brand_config_v1";
+      const DS_SELECTION_KEY = "smartask_selected_datasources_v1";
+
+      function defaultBrandConfig() {
+        return {
+          projectName: "广东省消防救援总队数据治理（2024）项目",
+          headerLogo: "BI",
+          sideLogo: "粤消",
+        };
+      }
+
+      function loadBrandConfig() {
+        try {
+          const raw = localStorage.getItem(BRAND_STORAGE_KEY);
+          const data = raw ? JSON.parse(raw) : null;
+          return { ...defaultBrandConfig(), ...(data || {}) };
+        } catch {
+          return defaultBrandConfig();
+        }
+      }
+
+      function applyBrandToShell(config) {
+        const mapping = {
+          sideLogo: config && config.sideLogo,
+          projectName: config && config.projectName,
+        };
+        Object.entries(mapping).forEach(([key, val]) => {
+          if (!val) return;
+          document.querySelectorAll(`[data-brand="${key}"]`).forEach((el) => {
+            el.textContent = val;
+          });
+        });
+      }
+
+      function loadDatasourceSelection() {
+        try {
+          const raw = localStorage.getItem(DS_SELECTION_KEY);
+          const data = raw ? JSON.parse(raw) : [];
+          return Array.isArray(data) ? data : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveDatasourceSelection(ids) {
+        try {
+          localStorage.setItem(DS_SELECTION_KEY, JSON.stringify(ids || []));
+        } catch {}
+      }
+
+      const app = createApp({
+        setup() {
+          const me = ref(null);
+          const brand = ref(loadBrandConfig());
+          const showLogin = ref(false);
+          const login = ref({ username: "", password: "" });
+          const loginError = ref("");
+          const busy = ref(false);
+
+          const dataSources = ref([]);
+          const selectedDataSources = ref(loadDatasourceSelection());
+          const examples = ref([]);
+          const metrics = ref(null);
+          const metricsLoading = ref(false);
+
+          const showAddSource = ref(false);
+          const showAddTable = ref(false);
+          const addSourceLoading = ref(false);
+          const addTableLoading = ref(false);
+          const addSource = ref({
+            id: "",
+            name: "",
+            description: "",
+            db_type: "sqlite",
+            db_path: "",
+            db_url: "",
+            tablesText: "",
+          });
+          const addTable = ref({
+            datasourceId: "",
+            datasourceName: "",
+            datasourceDescription: "",
+            dbPath: "",
+            tableName: "",
+            columnsText: "id:TEXT\nname:TEXT\ncount:INTEGER",
+            rowsText: "",
+          });
+          const showUploadTable = ref(false);
+          const uploadTableLoading = ref(false);
+          const uploadTable = ref({
+            datasourceId: "",
+            datasourceName: "",
+            datasourceDescription: "",
+            dbPath: "",
+            tableName: "",
+            sheetName: "",
+            maxRows: 1000,
+          });
+          const uploadWorkbook = ref(null);
+          const uploadSheetOptions = ref([]);
+          const dbTypeOptions = [
+            { label: "SQLite", value: "sqlite" },
+            { label: "MySQL", value: "mysql" },
+            { label: "PostgreSQL", value: "postgres" },
+          ];
+          const uploadRows = ref([]);
+          const uploadColumns = ref([]);
+          const uploadPreviewRows = ref([]);
+          const uploadPreviewColumns = computed(() => {
+            return (uploadColumns.value || []).map((c) => ({
+              title: c.name,
+              dataIndex: c.name,
+              key: c.name,
+            }));
+          });
+
+          function openChat() {
+            window.location.href = "/";
+          }
+
+          async function refreshMe() {
+            try {
+              const res = await apiFetch("/auth/me");
+              me.value = res.user || null;
+            } catch {
+              me.value = null;
+            }
+          }
+
+          async function doLogin() {
+            busy.value = true;
+            loginError.value = "";
+            try {
+              await apiFetch("/auth/login", { method: "POST", body: JSON.stringify(login.value) });
+              showLogin.value = false;
+              await refreshMe();
+              await refreshDataSources();
+              await refreshExamples();
+              await refreshMetrics();
+            } catch (e) {
+              loginError.value = e.message || "登录失败";
+            } finally {
+              busy.value = false;
+            }
+          }
+
+          async function logout() {
+            await apiFetch("/auth/logout", { method: "POST" });
+            me.value = null;
+            showLogin.value = true;
+          }
+
+          async function refreshDataSources() {
+            const res = await apiFetch("/datasources");
+            dataSources.value = res.data || [];
+            const preferred = selectedDataSources.value.length ? selectedDataSources.value : loadDatasourceSelection();
+            const valid = preferred.filter((id) => dataSources.value.some((d) => d.id === id));
+            selectedDataSources.value = valid.length ? valid : dataSources.value.map((d) => d.id);
+          }
+
+          async function refreshExamples() {
+            const res = await apiFetch("/examples");
+            examples.value = res.examples || [];
+          }
+
+          async function refreshMetrics() {
+            if (!me.value) return;
+            metricsLoading.value = true;
+            try {
+              const res = await apiFetch("/metrics");
+              metrics.value = res.data || null;
+            } catch (e) {
+              metrics.value = null;
+            } finally {
+              metricsLoading.value = false;
+            }
+          }
+
+          function normalizeTableText(text) {
+            return (text || "")
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean);
+          }
+
+          async function submitAddSource() {
+            if (addSourceLoading.value) return;
+            const id = (addSource.value.id || "").trim();
+            const name = (addSource.value.name || "").trim();
+            const description = (addSource.value.description || "").trim();
+            const dbType = String(addSource.value.db_type || "sqlite").trim().toLowerCase();
+            const db_path = (addSource.value.db_path || "").trim();
+            const db_url = (addSource.value.db_url || "").trim();
+            const tables = normalizeTableText(addSource.value.tablesText);
+            if (!id) {
+              antd.message.error("请填写数据源ID");
+              return;
+            }
+            if (!name) {
+              antd.message.error("请填写名称");
+              return;
+            }
+            if (!tables.length) {
+              antd.message.error("请填写表名");
+              return;
+            }
+            if (dbType !== "sqlite" && !db_url) {
+              antd.message.error("请填写数据库连接地址");
+              return;
+            }
+            addSourceLoading.value = true;
+            try {
+              const payload = { id, name, description, db_type: dbType || "sqlite", tables };
+              if (dbType === "sqlite" && db_path) payload.db_path = db_path;
+              if (dbType !== "sqlite") payload.db_url = db_url;
+              await apiFetch("/datasources", { method: "POST", body: JSON.stringify(payload) });
+              antd.message.success("数据源已新增");
+              showAddSource.value = false;
+              addSource.value = {
+                id: "",
+                name: "",
+                description: "",
+                db_type: "sqlite",
+                db_path: "",
+                db_url: "",
+                tablesText: "",
+              };
+              if (!selectedDataSources.value.includes(id)) selectedDataSources.value.push(id);
+              await refreshDataSources();
+            } catch (e) {
+              antd.message.error(e.message || "保存失败");
+            } finally {
+              addSourceLoading.value = false;
+            }
+          }
+
+          async function submitAddTable() {
+            if (addTableLoading.value) return;
+            const id = (addTable.value.datasourceId || "").trim();
+            const name = (addTable.value.datasourceName || "").trim();
+            const description = (addTable.value.datasourceDescription || "").trim();
+            const dbPath = (addTable.value.dbPath || "").trim();
+            const tableName = (addTable.value.tableName || "").trim();
+            const columnsText = (addTable.value.columnsText || "").trim();
+            const rowsText = (addTable.value.rowsText || "").trim();
+
+            if (!id) {
+              antd.message.error("请填写数据源ID");
+              return;
+            }
+            if (!tableName) {
+              antd.message.error("请填写表名");
+              return;
+            }
+            if (!columnsText) {
+              antd.message.error("请填写字段定义");
+              return;
+            }
+
+            const columns = columnsText
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((line) => {
+                const [namePart, typePart] = line.split(":");
+                return { name: (namePart || "").trim(), type: (typePart || "TEXT").trim() };
+              })
+              .filter((c) => c.name);
+
+            if (!columns.length) {
+              antd.message.error("字段定义不正确");
+              return;
+            }
+
+            let rows = [];
+            if (rowsText) {
+              try {
+                rows = JSON.parse(rowsText);
+                if (!Array.isArray(rows)) rows = [];
+              } catch {
+                antd.message.error("示例数据格式错误（需JSON数组）");
+                return;
+              }
+            }
+
+            addTableLoading.value = true;
+            try {
+              const payload = {
+                id,
+                name,
+                description,
+                tables: [tableName],
+                create_table: { name: tableName, columns, rows },
+              };
+              if (dbPath) payload.db_path = dbPath;
+              await apiFetch("/datasources", { method: "POST", body: JSON.stringify(payload) });
+              antd.message.success("表格已新增");
+              showAddTable.value = false;
+              addTable.value = {
+                datasourceId: "",
+                datasourceName: "",
+                datasourceDescription: "",
+                dbPath: "",
+                tableName: "",
+                columnsText: "id:TEXT\nname:TEXT\ncount:INTEGER",
+                rowsText: "",
+              };
+              if (!selectedDataSources.value.includes(id)) selectedDataSources.value.push(id);
+              await refreshDataSources();
+            } catch (e) {
+              antd.message.error(e.message || "保存失败");
+            } finally {
+              addTableLoading.value = false;
+            }
+          }
+
+          function sanitizeIdentifier(name, fallback) {
+            const safe = (name || "").toString().trim().replace(/[^\w]/g, "_");
+            if (!safe) return fallback || "";
+            if (/^\d/.test(safe)) return `_${safe}`;
+            return safe;
+          }
+
+          function inferColumnType(values) {
+            let hasFloat = false;
+            let hasInt = false;
+            let hasOther = false;
+            for (const v of values) {
+              if (v === null || v === undefined || v === "") continue;
+              if (typeof v === "number") {
+                if (Number.isInteger(v)) hasInt = true;
+                else hasFloat = true;
+                continue;
+              }
+              if (typeof v === "string") {
+                const t = v.trim();
+                if (!t) continue;
+                if (/^-?\d+(\.\d+)?$/.test(t)) {
+                  const num = Number(t);
+                  if (Number.isInteger(num)) hasInt = true;
+                  else hasFloat = true;
+                } else {
+                  hasOther = true;
+                }
+                continue;
+              }
+              hasOther = true;
+            }
+            if (hasOther) return "TEXT";
+            if (hasFloat) return "REAL";
+            if (hasInt) return "INTEGER";
+            return "TEXT";
+          }
+
+          function normalizeValue(value, type) {
+            if (value === null || value === undefined || value === "") return null;
+            if (type === "INTEGER") {
+              const v = typeof value === "number" ? value : Number(String(value).trim());
+              return Number.isFinite(v) ? Math.trunc(v) : null;
+            }
+            if (type === "REAL") {
+              const v = typeof value === "number" ? value : Number(String(value).trim());
+              return Number.isFinite(v) ? v : null;
+            }
+            return value;
+          }
+
+          function buildUploadRows(rows, maxRows) {
+            const sliced = rows.slice(0, maxRows);
+            const rawCols = Object.keys(sliced[0] || {});
+            const colMap = {};
+            const used = new Set();
+            rawCols.forEach((col, idx) => {
+              let safe = sanitizeIdentifier(col, `col_${idx + 1}`);
+              let base = safe;
+              let i = 2;
+              while (used.has(safe)) {
+                safe = `${base}_${i}`;
+                i += 1;
+              }
+              used.add(safe);
+              colMap[col] = safe;
+            });
+
+            const normalizedRows = sliced.map((row) => {
+              const out = {};
+              for (const [orig, safe] of Object.entries(colMap)) {
+                out[safe] = row[orig];
+              }
+              return out;
+            });
+
+            const columns = Object.values(colMap).map((name) => ({ name, type: "TEXT" }));
+            for (const col of columns) {
+              const values = normalizedRows.map((r) => r[col.name]);
+              col.type = inferColumnType(values);
+            }
+            for (const row of normalizedRows) {
+              for (const col of columns) {
+                row[col.name] = normalizeValue(row[col.name], col.type);
+              }
+            }
+            return { columns, rows: normalizedRows };
+          }
+
+          async function parseUploadSheet() {
+            const wb = uploadWorkbook.value;
+            if (!wb) return;
+            const sheetName = uploadTable.value.sheetName || wb.SheetNames[0];
+            const ws = wb.Sheets[sheetName];
+            if (!ws) return;
+
+            const rows = XLSX.utils.sheet_to_json(ws, { defval: null, raw: true });
+            if (!rows.length) {
+              uploadRows.value = [];
+              uploadColumns.value = [];
+              uploadPreviewRows.value = [];
+              return;
+            }
+
+            const maxRows = Math.max(1, parseInt(uploadTable.value.maxRows || 1000, 10));
+            const result = buildUploadRows(rows, maxRows);
+            uploadRows.value = result.rows.map((r, idx) => ({ __idx: idx, ...r }));
+            uploadColumns.value = result.columns;
+            uploadPreviewRows.value = uploadRows.value.slice(0, 5);
+          }
+
+          async function handleUploadFileChange(event) {
+            const file = event && event.target && event.target.files ? event.target.files[0] : null;
+            if (!file) return;
+            try {
+              const buf = await file.arrayBuffer();
+              const wb = XLSX.read(buf, { type: "array" });
+              uploadWorkbook.value = wb;
+              uploadSheetOptions.value = (wb.SheetNames || []).map((n) => ({ label: n, value: n }));
+              uploadTable.value.sheetName = (wb.SheetNames && wb.SheetNames[0]) || "";
+              await parseUploadSheet();
+            } catch (e) {
+              antd.message.error(e.message || "读取文件失败");
+            }
+          }
+
+          async function onUploadSheetChange() {
+            await parseUploadSheet();
+          }
+
+          async function submitUploadTable() {
+            if (uploadTableLoading.value) return;
+            const id = (uploadTable.value.datasourceId || "").trim();
+            const name = (uploadTable.value.datasourceName || "").trim();
+            const description = (uploadTable.value.datasourceDescription || "").trim();
+            const dbPath = (uploadTable.value.dbPath || "").trim();
+            const tableName = (uploadTable.value.tableName || "").trim();
+
+            if (!id) {
+              antd.message.error("请填写数据源ID");
+              return;
+            }
+            if (!tableName) {
+              antd.message.error("请填写表名");
+              return;
+            }
+            if (!uploadRows.value.length || !uploadColumns.value.length) {
+              antd.message.error("请先选择文件并解析");
+              return;
+            }
+
+            const payload = {
+              id,
+              name,
+              description,
+              tables: [tableName],
+              create_table: {
+                name: tableName,
+                columns: uploadColumns.value,
+                rows: uploadRows.value.map(({ __idx, ...rest }) => rest),
+              },
+            };
+            if (dbPath) payload.db_path = dbPath;
+
+            uploadTableLoading.value = true;
+            try {
+              await apiFetch("/datasources", { method: "POST", body: JSON.stringify(payload) });
+              antd.message.success("表格已导入");
+              showUploadTable.value = false;
+              uploadTable.value = {
+                datasourceId: "",
+                datasourceName: "",
+                datasourceDescription: "",
+                dbPath: "",
+                tableName: "",
+                sheetName: "",
+                maxRows: 1000,
+              };
+              uploadWorkbook.value = null;
+              uploadSheetOptions.value = [];
+              uploadRows.value = [];
+              uploadColumns.value = [];
+              uploadPreviewRows.value = [];
+              if (!selectedDataSources.value.includes(id)) {
+                selectedDataSources.value.push(id);
+              }
+              await refreshDataSources();
+            } catch (e) {
+              antd.message.error(e.message || "导入失败");
+            } finally {
+              uploadTableLoading.value = false;
+            }
+          }
+
+          function confirmDeleteDatasource(ds) {
+            if (!ds || !ds.id || ds.is_default) return;
+            try {
+              antd.Modal.confirm({
+                title: "确认删除数据源？",
+                content: `将从列表移除「${ds.name || ds.id}」，已上传表格不再可查询。`,
+                okText: "删除",
+                okType: "danger",
+                cancelText: "取消",
+                onOk: async () => {
+                  try {
+                    await apiFetch(`/datasources/${encodeURIComponent(ds.id)}`, { method: "DELETE" });
+                    selectedDataSources.value = (selectedDataSources.value || []).filter((id) => id !== ds.id);
+                    await refreshDataSources();
+                    antd.message.success("已删除");
+                  } catch (e) {
+                    antd.message.error(e.message || "删除失败");
+                  }
+                },
+              });
+            } catch {}
+          }
+
+          function fillExample(ex) {
+            const text = (ex || "").trim();
+            if (!text) return;
+            try {
+              navigator.clipboard.writeText(text);
+              antd.message.success("示例已复制，可回到智能问数粘贴");
+            } catch {
+              antd.message.info("已点击示例，可回到智能问数手动输入");
+            }
+          }
+
+          watch(selectedDataSources, (val) => {
+            saveDatasourceSelection(val || []);
+          }, { deep: true });
+
+          onMounted(async () => {
+            applyBrandToShell(brand.value);
+            window.addEventListener("smartask-auth-required", () => {
+              showLogin.value = true;
+            });
+            await refreshMe();
+            if (me.value) {
+              await refreshDataSources();
+              await refreshExamples();
+              await refreshMetrics();
+            } else {
+              showLogin.value = true;
+            }
+          });
+
+          return {
+            me,
+            brand,
+            showLogin,
+            login,
+            loginError,
+            busy,
+            openChat,
+            refreshDataSources,
+            refreshMetrics,
+            refreshExamples,
+            doLogin,
+            logout,
+            dataSources,
+            selectedDataSources,
+            examples,
+            metrics,
+            metricsLoading,
+            showAddSource,
+            showAddTable,
+            showUploadTable,
+            addSource,
+            addTable,
+            dbTypeOptions,
+            addSourceLoading,
+            addTableLoading,
+            uploadTable,
+            uploadTableLoading,
+            uploadSheetOptions,
+            uploadRows,
+            uploadPreviewRows,
+            uploadPreviewColumns,
+            submitAddSource,
+            submitAddTable,
+            handleUploadFileChange,
+            onUploadSheetChange,
+            submitUploadTable,
+            confirmDeleteDatasource,
+            fillExample,
+          };
+        }
+      });
+      try {
+        app.use(antd);
+        app.mount("#app");
+        const el = document.getElementById("app");
+        if (el) el.removeAttribute("v-cloak");
+      } catch (e) {
+        try {
+          const msg = (e && (e.message || e.toString())) || "未知错误";
+          const loading = document.querySelector(".boot-loading");
+          if (loading) loading.textContent = `加载失败：${msg}`;
+        } catch {}
+      }
+    </script>
+  </body>
+</html>
+{% endraw %}

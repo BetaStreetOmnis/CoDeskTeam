@@ -1,0 +1,22 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // aistaff 项目级 OpenCode 配置：
+  // - aistaff 后端通过 header `x-opencode-directory` 指向工作区目录，因此这里的配置会生效。
+  // - 不要把真实 key 写进仓库；请用环境变量 `OPENAI_API_KEY` 注入给 opencode server 进程。
+  "model": "openai/gpt-5.2",
+  "default_agent": "build",
+  "provider": {
+    "openai": {
+      "options": {
+        // 你的 OpenAI 兼容网关（如 tabcode）；如需 /v1 请自行补全
+        // 用本地 aistaff-api 代理一层（注入 gateways 需要的 instructions / stream=true）
+        // 需要先启动后端（默认 8000 端口）
+        "baseURL": "http://127.0.0.1:8000/openai/v1",
+        // tabcode 目前只提供 OpenAI Responses API（/responses），不支持 /chat/completions
+        "useResponsesApi": true,
+        // 部分网关会要求 Responses API 必须带非空 instructions
+        "instructions": "You are a helpful assistant.",
+      },
+    },
+  },
+}

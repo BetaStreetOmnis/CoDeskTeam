@@ -1,0 +1,1494 @@
+{% raw %}
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>数据开发 - 广东省消防救援总队数据治理（2024）项目</title>
+
+    <link href="static/vendor/ant-design-vue/reset.css" rel="stylesheet" />
+    <link href="static/app_shell.css" rel="stylesheet" />
+    <script src="static/vendor/vue/vue.global.prod.js"></script>
+    <script src="static/vendor/dayjs/dayjs.min.js"></script>
+    <script src="static/vendor/dayjs/plugin/advancedFormat.js"></script>
+    <script src="static/vendor/dayjs/plugin/customParseFormat.js"></script>
+    <script src="static/vendor/dayjs/plugin/quarterOfYear.js"></script>
+    <script src="static/vendor/dayjs/plugin/weekday.js"></script>
+    <script src="static/vendor/dayjs/plugin/localeData.js"></script>
+    <script src="static/vendor/dayjs/plugin/weekOfYear.js"></script>
+    <script src="static/vendor/dayjs/plugin/weekYear.js"></script>
+    <script>
+      if (window.dayjs_plugin_advancedFormat) dayjs.extend(window.dayjs_plugin_advancedFormat);
+      if (window.dayjs_plugin_customParseFormat) dayjs.extend(window.dayjs_plugin_customParseFormat);
+      if (window.dayjs_plugin_quarterOfYear) dayjs.extend(window.dayjs_plugin_quarterOfYear);
+      if (window.dayjs_plugin_weekday) dayjs.extend(window.dayjs_plugin_weekday);
+      if (window.dayjs_plugin_localeData) dayjs.extend(window.dayjs_plugin_localeData);
+      if (window.dayjs_plugin_weekOfYear) dayjs.extend(window.dayjs_plugin_weekOfYear);
+      if (window.dayjs_plugin_weekYear) dayjs.extend(window.dayjs_plugin_weekYear);
+    </script>
+    <script src="static/vendor/ant-design-vue/antd-with-locales.min.js"></script>
+    <script src="static/vendor/echarts/echarts.min.js"></script>
+
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --text: #0f172a;
+        --muted: #64748b;
+        --border: rgba(15, 23, 42, 0.10);
+        --surface: rgba(255, 255, 255, 0.82);
+        --surface2: rgba(255, 255, 255, 0.62);
+        --shadow: 0 18px 60px rgba(15, 23, 42, 0.12);
+        --radius: 16px;
+        --primary: #2563eb;
+        --accent: #06b6d4;
+        --good: #22c55e;
+        --warn: #f59e0b;
+        --bad: #ef4444;
+      }
+
+      [v-cloak] { display: none; }
+      .boot-loading {
+        margin: 18px;
+        border-radius: 16px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: var(--shadow);
+        height: calc(100vh - 74px - 36px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        font-size: 13px;
+      }
+      #app:not([v-cloak]) + .boot-loading { display: none; }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(1200px circle at 10% -10%, rgba(37, 99, 235, 0.14) 0%, rgba(37, 99, 235, 0) 60%),
+          radial-gradient(900px circle at 100% 0%, rgba(6, 182, 212, 0.10) 0%, rgba(6, 182, 212, 0) 55%),
+          linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      .muted { color: var(--muted); font-size: 12px; }
+
+      /* light shell override (keep pages separate but same platform) */
+      .sidebar {
+        background: rgba(255, 255, 255, 0.78);
+        border-right: 1px solid rgba(15, 23, 42, 0.10);
+      }
+      .side-brand {
+        border-color: rgba(15, 23, 42, 0.10);
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow: 0 14px 36px rgba(15, 23, 42, 0.10);
+      }
+      .side-logo {
+        background: linear-gradient(135deg, rgba(37, 99, 235, 1) 0%, rgba(6, 182, 212, 1) 100%);
+      }
+      .side-title { color: #0f172a; }
+      .side-sub { color: #64748b; }
+      .side-link {
+        color: #0f172a;
+        border-color: rgba(15, 23, 42, 0.10);
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+      }
+      .side-link:hover { border-color: rgba(37, 99, 235, 0.28); box-shadow: 0 16px 42px rgba(15, 23, 42, 0.10); }
+      .side-link.active {
+        border-color: rgba(37, 99, 235, 0.40);
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(6, 182, 212, 0.08) 100%);
+        box-shadow: 0 18px 56px rgba(15, 23, 42, 0.12);
+      }
+      .side-badge {
+        color: rgba(37, 99, 235, 1);
+        background: rgba(37, 99, 235, 0.08);
+        border-color: rgba(37, 99, 235, 0.18);
+      }
+      .side-tip {
+        border-color: rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.72);
+        color: #64748b;
+      }
+      .side-tip b { color: #0f172a; }
+
+      .hd {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        height: 74px;
+        display:flex;
+        align-items:center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 0 20px;
+        background: rgba(255, 255, 255, 0.82);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border);
+      }
+      .hd::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 70%, var(--good) 100%);
+      }
+      .hd > * { position: relative; }
+
+      .title-row { display:flex; align-items:center; gap: 10px; flex-wrap: wrap; }
+      .title { font-size: 18px; font-weight: 900; letter-spacing: 0.4px; }
+      .actions { display:flex; gap: 10px; flex-wrap: wrap; justify-content:flex-end; align-items:center; }
+
+      .layout {
+        width: min(1680px, 100%);
+        margin: 0 auto;
+        padding: 18px;
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: 16px;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        border-radius: var(--radius);
+        overflow:hidden;
+        box-shadow: var(--shadow);
+      }
+      .card-hd {
+        padding: 12px 14px;
+        display:flex;
+        align-items:center;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        background: rgba(255,255,255,0.62);
+      }
+      .card-title { display:flex; align-items:center; gap: 8px; flex-wrap: wrap; font-weight: 800; }
+      .card-bd { padding: 14px; }
+
+      .task-item {
+        padding: 12px 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(255,255,255,0.72);
+        cursor: pointer;
+        transition: transform .12s ease, border-color .12s ease;
+      }
+      .task-item:hover { transform: translateY(-1px); border-color: rgba(37, 99, 235, 0.32); }
+      .task-item.active { border-color: rgba(6,182,212,0.55); box-shadow: 0 16px 44px rgba(15,23,42,0.14); }
+      .task-name { font-weight: 900; }
+      .task-desc { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .kpi {
+        border-radius: 16px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(255,255,255,0.72);
+        box-shadow: var(--shadow);
+        padding: 12px 14px;
+        overflow: hidden;
+        position: relative;
+      }
+      .kpi::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(600px circle at 10% 0%, rgba(37, 99, 235, 0.12) 0%, rgba(37, 99, 235, 0) 55%);
+        opacity: 0.7;
+        pointer-events: none;
+      }
+      .kpi > * { position: relative; }
+      .kpi-label { display:flex; align-items:center; justify-content:space-between; gap: 10px; color: var(--muted); font-size: 12px; }
+      .kpi-value { font-size: 20px; font-weight: 900; letter-spacing: 0.2px; margin-top: 6px; }
+      .kpi-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+      .chart {
+        width: 100%;
+        height: 420px;
+        border-radius: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(255,255,255,0.78);
+      }
+      .chart-dropover {
+        border-color: rgba(6, 182, 212, 0.60) !important;
+        box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.18);
+      }
+
+      .drop-hint {
+        border-radius: 14px;
+        border: 1px dashed rgba(15, 23, 42, 0.16);
+        background: rgba(255,255,255,0.62);
+        padding: 10px 12px;
+        margin-bottom: 10px;
+      }
+
+      .palette {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .comp-card {
+        width: 188px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(255,255,255,0.72);
+        cursor: grab;
+        user-select: none;
+        transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+      }
+      .comp-card:hover { transform: translateY(-1px); box-shadow: 0 18px 52px rgba(15, 23, 42, 0.12); }
+      .comp-card:active { cursor: grabbing; }
+      .comp-card.source { border-color: rgba(6, 182, 212, 0.42); }
+      .comp-card.transform { border-color: rgba(124, 58, 237, 0.42); }
+      .comp-card.sink { border-color: rgba(34, 197, 94, 0.42); }
+      .comp-name { font-weight: 900; }
+      .comp-desc { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+
+      .log {
+        height: 260px;
+        border-radius: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: #f1f5f9;
+        padding: 10px 12px;
+        overflow: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+
+      .ant-input {
+        background: rgba(255,255,255,0.92);
+        border-color: rgba(15, 23, 42, 0.14);
+        color: var(--text);
+        border-radius: 12px;
+      }
+      .ant-input::placeholder { color: rgba(100, 116, 139, 0.9); }
+      .ant-input:focus, .ant-input-focused {
+        border-color: rgba(6, 182, 212, 0.55);
+        box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.16);
+      }
+      .ant-btn { border-radius: 12px; }
+      .ant-btn-default {
+        background: rgba(255,255,255,0.92);
+        border-color: rgba(15, 23, 42, 0.14);
+        color: var(--text);
+      }
+      .ant-btn-default:hover {
+        border-color: rgba(37, 99, 235, 0.40);
+        color: var(--text);
+      }
+      .ant-btn-primary {
+        border: none;
+        background: linear-gradient(135deg, rgba(37, 99, 235, 1) 0%, rgba(6, 182, 212, 1) 100%);
+      }
+      .ant-btn-primary:hover { opacity: 0.95; }
+      .ant-tag {
+        border-radius: 999px;
+        background: rgba(255,255,255,0.92);
+        border-color: rgba(15, 23, 42, 0.14);
+        color: var(--text);
+      }
+
+      @media (max-width: 1400px) { .layout { grid-template-columns: 1fr; } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 560px) { .summary { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="side-brand">
+          <div class="side-logo" data-brand="sideLogo">粤消</div>
+          <div>
+            <div class="side-title" data-brand="projectName">广东省消防救援总队数据治理（2024）项目</div>
+          </div>
+        </div>
+        <nav class="side-nav">
+          <a class="side-link" href="./"><span>智能问数</span><span class="side-badge">AI</span></a>
+          <a class="side-link" href="./datasources"><span>数据源</span><span class="side-badge">DATA</span></a>
+          <a class="side-link active" href="./data-dev"><span>数据开发</span><span class="side-badge">DEV</span></a>
+          <a class="side-link" href="./dashboard"><span>图表大屏</span><span class="side-badge">BI</span></a>
+        </nav>
+      </aside>
+      <div class="shell-content">
+      <div id="app" v-cloak>
+      <div class="hd">
+        <div class="hd-left">
+          <div class="title-row">
+            <div class="title">数据开发（实时任务）</div>
+            <a-tag color="geekblue">Flink</a-tag>
+            <a-tag>可视化编排 · 版本回滚 · 联动推送</a-tag>
+          </div>
+          <div class="muted">{{ brand.projectName }}</div>
+        </div>
+        <div class="actions">
+          <a-tag v-if="me" color="geekblue">{{ me.username }}</a-tag>
+          <a-tag v-if="me">{{ me.role }}</a-tag>
+          <template v-if="me">
+            <a-button type="default" @click="showLogin=true">切换账号</a-button>
+            <a-button type="text" @click="logout">退出</a-button>
+          </template>
+          <template v-else>
+            <a-button type="primary" @click="showLogin=true">登录</a-button>
+          </template>
+          <a-button type="default" :disabled="busy || !me" @click="confirmReset">重置</a-button>
+          <a-button type="default" :loading="busy" :disabled="!me" @click="refresh">刷新</a-button>
+          <a-button type="primary" :disabled="!me" @click="showCreate=true">新建任务</a-button>
+        </div>
+      </div>
+
+      <div class="layout">
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-title">
+              <span>任务列表</span>
+              <a-tag>{{ tasks.length }} 个</a-tag>
+            </div>
+            <a-input v-model:value="keyword" placeholder="搜索任务名称/描述" style="width: 200px;" allow-clear />
+          </div>
+          <div class="card-bd">
+            <div style="display:flex; align-items:center; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
+              <a-segmented v-model:value="statusFilter" :options="statusOptions" />
+              <a-button size="small" type="default" :disabled="!me" @click="loadSources">数据源</a-button>
+            </div>
+
+            <div v-if="filteredTasks.length" style="display:flex; flex-direction: column; gap: 10px;">
+              <div
+                v-for="t in filteredTasks"
+                :key="t.id"
+                class="task-item"
+                :class="{active: selectedTask && selectedTask.id===t.id}"
+                @click="selectTask(t.id)"
+              >
+                <div style="display:flex; align-items:flex-start; justify-content: space-between; gap: 10px;">
+                  <div>
+                    <div class="task-name">{{ t.name }}</div>
+                    <div class="task-desc">{{ t.description || '—' }}</div>
+                  </div>
+                  <div style="display:flex; flex-direction: column; gap: 6px; align-items:flex-end; flex: none;">
+                    <a-tag :color="statusColor(t.status)">{{ statusText(t.status) }}</a-tag>
+                    <a-tag>{{ t.type || 'flink_realtime' }}</a-tag>
+                    <a-tag>v{{ t.version || 1 }}</a-tag>
+                  </div>
+                </div>
+                <div class="muted" style="margin-top: 8px;">
+                  更新时间：{{ fmtTime(t.updated_at) }}
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="muted" style="text-align:center; padding: 18px;">
+              暂无任务（点击右上角“新建任务”创建实时任务）
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-title">
+              <span>任务详情</span>
+              <template v-if="selectedTask">
+                <a-tag color="geekblue">{{ selectedTask.name }}</a-tag>
+                <a-tag>v{{ selectedTask.version }}</a-tag>
+              </template>
+            </div>
+            <div style="display:flex; gap: 10px; flex-wrap: wrap; justify-content:flex-end;">
+              <a-button type="default" :disabled="!selectedTask" @click="saveTask">保存</a-button>
+              <a-button type="primary" :disabled="!selectedTask" :loading="runStarting" @click="startRun">启动任务</a-button>
+            </div>
+          </div>
+          <div class="card-bd">
+            <template v-if="selectedTask">
+              <div class="summary">
+                <div class="kpi">
+                  <div class="kpi-label"><span>状态</span><a-tag :color="statusColor(selectedTask.status)">{{ statusText(selectedTask.status) }}</a-tag></div>
+                  <div class="kpi-value">{{ statusText(selectedTask.status) }}</div>
+                  <div class="kpi-sub">实时任务状态</div>
+                </div>
+                <div class="kpi">
+                  <div class="kpi-label"><span>并行度</span><a-tag>Flink</a-tag></div>
+                  <div class="kpi-value">{{ selectedTask.runtime?.parallelism ?? '-' }}</div>
+                  <div class="kpi-sub">Parallelism</div>
+                </div>
+                <div class="kpi">
+                  <div class="kpi-label"><span>Checkpoint</span><a-tag>ms</a-tag></div>
+                  <div class="kpi-value">{{ selectedTask.runtime?.checkpoint_interval_ms ?? '-' }}</div>
+                  <div class="kpi-sub">间隔（ms）</div>
+                </div>
+                <div class="kpi">
+                  <div class="kpi-label"><span>最近运行</span><a-tag>Run</a-tag></div>
+                  <div class="kpi-value">{{ runs.length ? fmtTime(runs[0].started_at) : '-' }}</div>
+                  <div class="kpi-sub">启动时间</div>
+                </div>
+              </div>
+
+                <a-tabs v-model:activeKey="activeTab">
+                <a-tab-pane key="pipeline" tab="可视化编排">
+                  <div class="muted" style="margin-bottom: 10px;">
+                    说明：以 DAG 形式呈现 Flink 实时任务拓扑，支持拖拽式组件配置、连线、参数配置，并保存版本。
+                  </div>
+                  <div class="drop-hint">
+                    <div style="font-weight: 900;">拖拽式组件配置</div>
+                    <div class="muted">从“组件库”拖拽到画布，或点击卡片快速添加；连线使用下方 source → target。</div>
+                  </div>
+                  <div class="palette">
+                    <div
+                      v-for="c in palette"
+                      :key="c.kind"
+                      class="comp-card"
+                      :class="c.category"
+                      draggable="true"
+                      @dragstart="(e) => onDragStart(c.kind, e)"
+                      @click="addNodeAt(c.kind)"
+                    >
+                      <div class="comp-name">{{ c.name }}</div>
+                      <div class="comp-desc">{{ c.desc }}</div>
+                    </div>
+                  </div>
+
+                  <div style="display:flex; gap: 12px; flex-wrap: wrap; align-items:flex-end; margin-bottom: 10px;">
+                    <div style="min-width: 220px;">
+                      <div class="muted" style="margin-bottom:6px;">连线（source → target）</div>
+                      <div style="display:flex; gap: 8px;">
+                        <a-select v-model:value="edgeSource" style="width: 200px;" :options="nodeIdOptions" placeholder="source" />
+                        <a-select v-model:value="edgeTarget" style="width: 200px;" :options="nodeIdOptions" placeholder="target" />
+                      </div>
+                    </div>
+                    <a-button type="default" @click="addEdge" :disabled="!edgeSource || !edgeTarget">添加连线</a-button>
+                  </div>
+
+                  <div
+                    ref="dagEl"
+                    class="chart"
+                    :class="{ 'chart-dropover': dragOver }"
+                    @dragover.prevent="dragOver=true"
+                    @dragenter.prevent="dragOver=true"
+                    @dragleave="dragOver=false"
+                    @drop="onDrop"
+                  ></div>
+                  <div class="muted" style="margin-top: 10px;">
+                    点击节点可编辑参数；任务保存后可在“版本管理”中生成版本与回滚。
+                  </div>
+                </a-tab-pane>
+
+                <a-tab-pane key="config" tab="运行配置">
+                  <a-form layout="vertical" style="max-width: 720px;">
+                    <a-form-item label="并行度（Parallelism）">
+                      <a-input-number v-model:value="selectedTask.runtime.parallelism" :min="1" :max="128" style="width: 260px;" />
+                    </a-form-item>
+                    <a-form-item label="Checkpoint 间隔（ms）">
+                      <a-input-number v-model:value="selectedTask.runtime.checkpoint_interval_ms" :min="0" :max="600000" style="width: 260px;" />
+                    </a-form-item>
+                    <a-form-item label="重启策略">
+                      <a-select v-model:value="selectedTask.runtime.restart_strategy" style="width: 260px;" :options="restartOptions" />
+                    </a-form-item>
+                    <div style="display:flex; gap: 12px; flex-wrap: wrap;">
+                      <a-form-item label="重启次数">
+                        <a-input-number v-model:value="selectedTask.runtime.restart_attempts" :min="0" :max="100" style="width: 260px;" />
+                      </a-form-item>
+                      <a-form-item label="重启延迟（ms）">
+                        <a-input-number v-model:value="selectedTask.runtime.restart_delay_ms" :min="0" :max="600000" style="width: 260px;" />
+                      </a-form-item>
+                    </div>
+                    <div class="muted">提示：可讲解“秒级接入/处理、checkpoint、重启容错”等能力。</div>
+                  </a-form>
+                </a-tab-pane>
+
+                <a-tab-pane key="versions" tab="版本管理">
+                  <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items:center; margin-bottom: 10px;">
+                    <a-input v-model:value="versionComment" placeholder="版本说明（例如：新增联动规则/调整窗口聚合）" style="width: min(520px, 100%);" />
+                    <a-button type="primary" :loading="versionSaving" @click="saveVersion">保存新版本</a-button>
+                  </div>
+                  <a-timeline>
+                    <a-timeline-item v-for="v in versions" :key="v.version">
+                      <div style="display:flex; align-items:center; justify-content: space-between; gap: 12px;">
+                        <div>
+                          <div style="font-weight: 800;">v{{ v.version }} · {{ v.comment || '—' }}</div>
+                          <div class="muted">{{ fmtTime(v.created_at) }}</div>
+                        </div>
+                        <a-button size="small" type="default" @click="rollback(v.version)">回滚到此版本</a-button>
+                      </div>
+                    </a-timeline-item>
+                  </a-timeline>
+                </a-tab-pane>
+
+                <a-tab-pane key="runs" tab="运行监控">
+                  <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items:center; margin-bottom: 10px;">
+                    <a-button type="primary" :loading="runStarting" @click="startRun">启动一次运行</a-button>
+                    <a-button type="default" :disabled="!selectedRunId" @click="refreshRun">刷新当前运行</a-button>
+                    <span class="muted">日志/指标随时间刷新，体现“实时任务运行监控”</span>
+                  </div>
+
+                  <a-table
+                    size="small"
+                    :columns="runColumns"
+                    :data-source="runTableData"
+                    :pagination="{ pageSize: 5 }"
+                    row-key="id"
+                    :customRow="(record) => ({ onClick: () => selectRun(record.id) })"
+                  />
+
+                  <div style="display:grid; grid-template-columns: 1fr 380px; gap: 12px; margin-top: 12px;">
+                    <div>
+                      <div style="display:flex; align-items:center; justify-content: space-between; margin-bottom: 8px;">
+                        <div style="font-weight: 800;">运行日志</div>
+                        <a-tag v-if="runView" :color="statusColor(runView.status)">{{ statusText(runView.status) }}</a-tag>
+                      </div>
+                      <div class="log">{{ runLogText }}</div>
+                    </div>
+                    <div>
+                      <div style="font-weight: 800; margin-bottom: 8px;">实时指标</div>
+                      <div style="display:flex; flex-direction: column; gap: 10px;">
+                        <div class="kpi">
+                          <div class="kpi-label"><span>输入QPS</span><a-tag>in</a-tag></div>
+                          <div class="kpi-value">{{ runView?.metrics?.input_qps ?? '-' }}</div>
+                          <div class="kpi-sub">来自数据源的输入吞吐</div>
+                        </div>
+                        <div class="kpi">
+                          <div class="kpi-label"><span>输出QPS</span><a-tag>out</a-tag></div>
+                          <div class="kpi-value">{{ runView?.metrics?.output_qps ?? '-' }}</div>
+                          <div class="kpi-sub">写入主题库/大屏推送</div>
+                        </div>
+                        <div class="kpi">
+                          <div class="kpi-label"><span>端到端延迟</span><a-tag>ms</a-tag></div>
+                          <div class="kpi-value">{{ runView?.metrics?.latency_ms ?? '-' }}</div>
+                          <div class="kpi-sub">秒级处理能力展示</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </a-tab-pane>
+
+                <a-tab-pane key="linkage" tab="联动规则">
+                  <div class="muted" style="margin-bottom: 10px;">
+                    场景：警情触发 → 自动同步推送周边救援力量/装备库存/人员定位与车辆GPS至指挥大屏，支撑应急决策。
+                  </div>
+                  <a-form layout="vertical" style="max-width: 820px;">
+                    <a-form-item label="启用联动">
+                      <a-switch v-model:checked="selectedTask.linkage.enabled" />
+                    </a-form-item>
+                    <a-form-item label="触发条件">
+                      <a-select v-model:value="selectedTask.linkage.trigger" style="width: 320px;" :options="[{value:'警情触发',label:'警情触发'},{value:'手动触发',label:'手动触发'}]" />
+                    </a-form-item>
+                    <a-form-item label="联动动作">
+                      <a-checkbox-group v-model:value="linkageEnabledNames">
+                        <a-checkbox v-for="r in selectedTask.linkage.rules" :key="r.name" :value="r.name">{{ r.name }}</a-checkbox>
+                      </a-checkbox-group>
+                    </a-form-item>
+                    <div style="display:flex; gap: 10px; flex-wrap: wrap;">
+                      <a-button type="primary" @click="simulate" :loading="simulating">模拟触发</a-button>
+                      <a-button type="default" @click="saveTask">保存联动配置</a-button>
+                    </div>
+                  </a-form>
+                </a-tab-pane>
+              </a-tabs>
+            </template>
+
+            <template v-else>
+              <div class="muted" style="text-align:center; padding: 30px;">
+                请选择左侧任务，或点击右上角“新建任务”。
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <a-modal v-model:open="showCreate" title="新建实时任务" :maskClosable="false" @ok="doCreate" :confirmLoading="creating">
+        <a-form layout="vertical">
+          <a-form-item label="任务名称">
+            <a-input v-model:value="createForm.name" />
+          </a-form-item>
+          <a-form-item label="任务类型">
+            <a-select v-model:value="createForm.type" :options="taskTypeOptions" />
+          </a-form-item>
+          <a-form-item label="描述">
+            <a-textarea v-model:value="createForm.description" :auto-size="{minRows:3,maxRows:5}" />
+          </a-form-item>
+        </a-form>
+      </a-modal>
+
+      <a-drawer v-model:open="nodeDrawerOpen" title="节点配置" width="520">
+        <template #extra>
+          <a-button type="primary" @click="saveNode">保存</a-button>
+        </template>
+        <template v-if="editingNode">
+          <a-form layout="vertical">
+            <a-form-item label="节点名称">
+              <a-input v-model:value="editingNode.name" />
+            </a-form-item>
+            <a-form-item label="节点类别">
+              <a-select v-model:value="editingNode.category" :options="[{value:'source',label:'source'},{value:'transform',label:'transform'},{value:'sink',label:'sink'}]" />
+            </a-form-item>
+            <a-form-item label="组件类型（kind）">
+              <a-input v-model:value="editingNode.kind" />
+            </a-form-item>
+            <a-form-item label="参数（JSON）">
+              <a-textarea v-model:value="editingNodeParamsText" :auto-size="{minRows:6,maxRows:12}" />
+            </a-form-item>
+            <div class="muted">提示：可强调“拖拽式组件配置 / 无需手写代码 / 配置可版本化与回滚”。</div>
+          </a-form>
+        </template>
+      </a-drawer>
+
+      <a-modal v-model:open="sourceModalOpen" title="实时数据源" :footer="null">
+        <div class="muted" style="margin-bottom: 10px;">支持对接智能接处警、人员定位、车辆GPS等实时数据源（秒级接入与处理）。</div>
+        <a-list :data-source="sources" bordered>
+          <template #renderItem="{ item }">
+            <a-list-item>
+              <a-list-item-meta :title="item.name" :description="item.description" />
+              <a-tag>{{ item.type }}</a-tag>
+            </a-list-item>
+          </template>
+        </a-list>
+      </a-modal>
+
+      <a-modal v-model:open="simulateModalOpen" title="联动模拟结果" :footer="null" width="720">
+        <template v-if="simulateResult">
+          <div style="font-weight: 800; margin-bottom: 6px;">触发：{{ simulateResult.trigger }}</div>
+          <div class="muted" style="margin-bottom: 12px;">
+            警情：{{ simulateResult.alarm.unit_name }} · {{ simulateResult.alarm.alarm_location }} · {{ simulateResult.alarm.processing_state }} · {{ simulateResult.alarm.alarm_time }}
+          </div>
+          <div style="display:flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+            <a-tag v-for="p in simulateResult.push_targets" :key="p.system + p.channel" color="geekblue">{{ p.system }}-{{ p.channel }}：{{ p.status }}</a-tag>
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="card" style="box-shadow:none;">
+              <div class="card-hd"><div class="card-title">推荐救援力量</div></div>
+              <div class="card-bd">
+                <a-list size="small" :data-source="simulateResult.recommended_forces">
+                  <template #renderItem="{ item }">
+                    <a-list-item>
+                      <span>{{ item.station }}</span>
+                      <a-tag>人员{{ item.personnel_count }}</a-tag>
+                    </a-list-item>
+                  </template>
+                </a-list>
+              </div>
+            </div>
+            <div class="card" style="box-shadow:none;">
+              <div class="card-hd"><div class="card-title">装备库存（在库）</div></div>
+              <div class="card-bd">
+                <a-list size="small" :data-source="simulateResult.recommended_equipment">
+                  <template #renderItem="{ item }">
+                    <a-list-item>
+                      <span>{{ item.station }}</span>
+                      <a-tag>在库{{ item.in_stock_qty }}</a-tag>
+                    </a-list-item>
+                  </template>
+                </a-list>
+              </div>
+            </div>
+          </div>
+        </template>
+      </a-modal>
+
+      <a-modal v-model:open="showLogin" title="登录" :footer="null" :maskClosable="false">
+        <a-form layout="vertical" :model="login" @finish="doLogin">
+          <a-form-item label="用户名" name="username" :rules="[{ required: true, message: '请输入用户名' }]">
+            <a-input v-model:value="login.username"></a-input>
+          </a-form-item>
+          <a-form-item label="密码" name="password" :rules="[{ required: true, message: '请输入密码' }]">
+            <a-input-password v-model:value="login.password"></a-input-password>
+          </a-form-item>
+          <div class="muted" v-if="loginError" style="color:#dc2626; margin-bottom: 10px;">{{ loginError }}</div>
+          <div style="display:flex; justify-content:flex-end; gap: 8px;">
+            <a-button @click="showLogin=false">取消</a-button>
+            <a-button type="primary" html-type="submit" :loading="busy">登录</a-button>
+          </div>
+        </a-form>
+      </a-modal>
+    </div>
+    <div class="boot-loading">加载中…</div>
+    </div>
+    </div>
+
+    <script>
+      const { createApp, ref, computed, nextTick, onMounted, watch } = Vue;
+
+      function apiFetch(path, options = {}) {
+        return fetch(new URL("api/dev" + path, window.location.href), {
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        }).then(async (r) => {
+          const text = await r.text();
+          let json = null;
+          try { json = text ? JSON.parse(text) : null; } catch {}
+          if (!r.ok) {
+            if (r.status === 401) {
+              try { window.dispatchEvent(new CustomEvent("smartask-auth-required")); } catch {}
+            }
+            const msg = (json && (json.detail || json.message)) || text || `HTTP ${r.status}`;
+            throw new Error(msg);
+          }
+          return json;
+        });
+      }
+
+      function baseFetch(path, options = {}) {
+        return fetch(new URL("api" + path, window.location.href), {
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        }).then(async (r) => {
+          const text = await r.text();
+          let json = null;
+          try { json = text ? JSON.parse(text) : null; } catch {}
+          if (!r.ok) {
+            if (r.status === 401) {
+              try { window.dispatchEvent(new CustomEvent("smartask-auth-required")); } catch {}
+            }
+            const msg = (json && (json.detail || json.message)) || text || `HTTP ${r.status}`;
+            throw new Error(msg);
+          }
+          return json;
+        });
+      }
+
+      function fmtTime(ms) {
+        if (!ms) return "-";
+        return dayjs(Number(ms)).format("YYYY-MM-DD HH:mm:ss");
+      }
+
+      const BRAND_STORAGE_KEY = "smartask_brand_config_v1";
+
+      function defaultBrandConfig() {
+        return {
+          projectName: "广东省消防救援总队数据治理（2024）项目",
+          sideLogo: "粤消",
+        };
+      }
+
+      function loadBrandConfig() {
+        try {
+          const raw = localStorage.getItem(BRAND_STORAGE_KEY);
+          const data = raw ? JSON.parse(raw) : null;
+          return { ...defaultBrandConfig(), ...(data || {}) };
+        } catch {
+          return defaultBrandConfig();
+        }
+      }
+
+      function applyBrandToShell(config) {
+        const mapping = {
+          sideLogo: config && config.sideLogo,
+          projectName: config && config.projectName,
+        };
+        Object.entries(mapping).forEach(([key, val]) => {
+          if (!val) return;
+          document.querySelectorAll(`[data-brand="${key}"]`).forEach((el) => {
+            el.textContent = val;
+          });
+        });
+      }
+
+      const app = createApp({
+        setup() {
+          const busy = ref(false);
+          const me = ref(null);
+          const brand = ref(loadBrandConfig());
+          const showLogin = ref(false);
+          const login = ref({ username: "", password: "" });
+          const loginError = ref("");
+
+          const tasks = ref([]);
+          const keyword = ref("");
+          const statusFilter = ref("全部");
+          const statusOptions = ["全部", "运行中", "草稿", "失败"];
+
+          const selectedTask = ref(null);
+          const versions = ref([]);
+          const versionComment = ref("");
+          const versionSaving = ref(false);
+
+          const activeTab = ref("pipeline");
+
+          const runs = ref([]);
+          const selectedRunId = ref("");
+          const runStarting = ref(false);
+          const runView = ref(null);
+          const runLogs = ref([]);
+          const runPoll = ref(null);
+
+          const showCreate = ref(false);
+          const creating = ref(false);
+          const createForm = ref({ name: "实时任务-" + dayjs().format("HHmmss"), type: "flink_realtime", description: "" });
+          const taskTypeOptions = [
+            { value: "flink_realtime", label: "Flink 实时任务" },
+            { value: "flink_sql", label: "Flink SQL 任务" },
+            { value: "sync_linkage", label: "联动推送任务" },
+          ];
+
+          const restartOptions = [
+            { value: "fixed-delay", label: "fixed-delay" },
+            { value: "failure-rate", label: "failure-rate" },
+            { value: "none", label: "none" },
+          ];
+
+          // DAG
+          const dagEl = ref(null);
+          let dagChart = null;
+          const palette = [
+            { kind: "kafka_source", category: "source", name: "Kafka实时源", desc: "智能接处警/定位/GPS 等实时流接入" },
+            { kind: "cleanse", category: "transform", name: "字段清洗", desc: "去空/标准化/字段映射，无需手写代码" },
+            { kind: "window_agg", category: "transform", name: "窗口聚合", desc: "5s/1min 等窗口统计计算" },
+            { kind: "geo_cleanse", category: "transform", name: "轨迹清洗/纠偏", desc: "定位/轨迹去噪、限速、纠偏" },
+            { kind: "ods_sink", category: "sink", name: "ODS写入", desc: "落地 ODS 明细表" },
+            { kind: "warehouse_sink", category: "sink", name: "主题库写入", desc: "写入 DWD/ADS 主题库" },
+            { kind: "push_sink", category: "sink", name: "指挥大屏推送", desc: "联动推送到指挥系统/大屏" },
+          ];
+          const dragKind = ref("");
+          const dragOver = ref(false);
+          const edgeSource = ref("");
+          const edgeTarget = ref("");
+
+          const nodeDrawerOpen = ref(false);
+          const editingNode = ref(null);
+          const editingNodeParamsText = ref("{}");
+
+          // Sources modal
+          const sourceModalOpen = ref(false);
+          const sources = ref([]);
+
+          // Linkage simulate
+          const simulating = ref(false);
+          const simulateModalOpen = ref(false);
+          const simulateResult = ref(null);
+
+          const linkageEnabledNames = computed({
+            get() {
+              const t = selectedTask.value;
+              if (!t || !t.linkage || !Array.isArray(t.linkage.rules)) return [];
+              return t.linkage.rules.filter(r => r.enabled !== false).map(r => r.name);
+            },
+            set(names) {
+              const t = selectedTask.value;
+              if (!t || !t.linkage || !Array.isArray(t.linkage.rules)) return;
+              t.linkage.rules = t.linkage.rules.map(r => ({ ...r, enabled: names.includes(r.name) }));
+            }
+          });
+
+          const filteredTasks = computed(() => {
+            const k = (keyword.value || "").trim().toLowerCase();
+            return (tasks.value || []).filter((t) => {
+              const hit = !k || String(t.name || "").toLowerCase().includes(k) || String(t.description || "").toLowerCase().includes(k);
+              if (!hit) return false;
+              const st = String(t.status || "");
+              if (statusFilter.value === "运行中") return st === "running";
+              if (statusFilter.value === "草稿") return st === "draft";
+              if (statusFilter.value === "失败") return st === "failed";
+              return true;
+            });
+          });
+
+          const nodeIdOptions = computed(() => {
+            const p = (selectedTask.value && selectedTask.value.pipeline) || {};
+            const ns = p.nodes || [];
+            return ns.map(n => ({ value: n.id, label: `${n.name} (${n.id})` }));
+          });
+
+          const runColumns = [
+            { title: "ID", dataIndex: "id", key: "id", ellipsis: true },
+            { title: "开始时间", dataIndex: "started_at", key: "started_at", customRender: ({ text }) => fmtTime(text) },
+            { title: "耗时(ms)", dataIndex: "duration_ms", key: "duration_ms" },
+            { title: "状态", dataIndex: "status", key: "status" },
+          ];
+
+          const runTableData = computed(() => (runs.value || []).map((r) => ({ ...r, status: r.status || (r.final_status ? "finished" : "unknown") })));
+
+          const runLogText = computed(() => {
+            if (!runLogs.value || !runLogs.value.length) return "（暂无日志）";
+            return runLogs.value.map((l) => `[${fmtTime(l.ts)}] ${l.level || "INFO"} ${l.msg || ""}`).join("\\n");
+          });
+
+          function statusColor(status) {
+            if (status === "running") return "green";
+            if (status === "draft") return "purple";
+            if (status === "failed") return "red";
+            if (status === "success") return "green";
+            if (status === "stopped") return "default";
+            return "default";
+          }
+
+          function statusText(status) {
+            if (status === "running") return "运行中";
+            if (status === "draft") return "草稿";
+            if (status === "failed") return "失败";
+            if (status === "success") return "成功";
+            if (status === "stopped") return "已停止";
+            return status || "—";
+          }
+
+          function back() {
+            window.location.href = "/";
+          }
+
+          async function refreshMe() {
+            try {
+              const res = await baseFetch("/auth/me");
+              me.value = res.user || null;
+            } catch {
+              me.value = null;
+            }
+          }
+
+          async function doLogin() {
+            busy.value = true;
+            loginError.value = "";
+            try {
+              await baseFetch("/auth/login", { method: "POST", body: JSON.stringify(login.value) });
+              showLogin.value = false;
+              await refreshMe();
+              await refresh();
+              await nextTick(renderDag);
+            } catch (e) {
+              loginError.value = e.message || "登录失败";
+            } finally {
+              busy.value = false;
+            }
+          }
+
+          async function logout() {
+            await baseFetch("/auth/logout", { method: "POST" });
+            me.value = null;
+            showLogin.value = true;
+          }
+
+          function confirmReset() {
+            try {
+              antd.Modal.confirm({
+                title: "确认重置数据开发？",
+                content: "将清空当前用户的任务/运行记录，并恢复系统预置实时任务（便于重复验证）。",
+                okText: "重置",
+                cancelText: "取消",
+                onOk: resetDev,
+              });
+            } catch {
+              resetDev();
+            }
+          }
+
+          async function resetDev() {
+            busy.value = true;
+            try {
+              await apiFetch("/reset", { method: "POST" });
+              selectedTask.value = null;
+              versions.value = [];
+              runs.value = [];
+              selectedRunId.value = "";
+              runView.value = null;
+              runLogs.value = [];
+              if (runPoll.value) {
+                clearInterval(runPoll.value);
+                runPoll.value = null;
+              }
+              antd.message.success("数据开发已重置");
+              await refresh();
+            } catch (e) {
+              antd.message.error(e.message || "重置失败");
+            } finally {
+              busy.value = false;
+            }
+          }
+
+          async function refresh() {
+            busy.value = true;
+            try {
+              const res = await apiFetch("/tasks");
+              tasks.value = res.data || [];
+              if (!selectedTask.value && tasks.value.length) {
+                await selectTask(tasks.value[0].id);
+              } else if (selectedTask.value) {
+                const still = tasks.value.find((t) => t.id === selectedTask.value.id);
+                if (!still && tasks.value.length) await selectTask(tasks.value[0].id);
+              }
+            } catch (e) {
+              antd.message.error(e.message || "加载失败");
+            } finally {
+              busy.value = false;
+            }
+          }
+
+          async function selectTask(id) {
+            try {
+              const res = await apiFetch(`/tasks/${id}`);
+              selectedTask.value = res.data;
+              versions.value = (res.data && res.data.versions) ? res.data.versions.slice().sort((a,b)=> (b.version||0)-(a.version||0)) : [];
+              await refreshRuns();
+              await nextTick();
+              renderDag();
+            } catch (e) {
+              antd.message.error(e.message || "加载任务失败");
+            }
+          }
+
+          function normalizePipeline() {
+            const t = selectedTask.value;
+            if (!t) return;
+            if (!t.pipeline) t.pipeline = { nodes: [], edges: [] };
+            if (!Array.isArray(t.pipeline.nodes)) t.pipeline.nodes = [];
+            if (!Array.isArray(t.pipeline.edges)) t.pipeline.edges = [];
+            if (!t.runtime) t.runtime = { parallelism: 4, checkpoint_interval_ms: 10000 };
+            if (!t.linkage) t.linkage = { enabled: true, trigger: "警情触发", rules: [] };
+            if (!Array.isArray(t.linkage.rules)) t.linkage.rules = [];
+          }
+
+          function computeLayout(nodes, edges) {
+            const indeg = new Map();
+            const adj = new Map();
+            for (const n of nodes) {
+              indeg.set(n.id, 0);
+              adj.set(n.id, []);
+            }
+            for (const e of edges) {
+              if (!adj.has(e.source) || !indeg.has(e.target)) continue;
+              adj.get(e.source).push(e.target);
+              indeg.set(e.target, (indeg.get(e.target) || 0) + 1);
+            }
+            const q = [];
+            const depth = new Map();
+            for (const n of nodes) {
+              if ((indeg.get(n.id) || 0) === 0) { q.push(n.id); depth.set(n.id, 0); }
+            }
+            while (q.length) {
+              const cur = q.shift();
+              const d = depth.get(cur) || 0;
+              for (const nxt of (adj.get(cur) || [])) {
+                depth.set(nxt, Math.max(depth.get(nxt) || 0, d + 1));
+                indeg.set(nxt, (indeg.get(nxt) || 0) - 1);
+                if ((indeg.get(nxt) || 0) === 0) q.push(nxt);
+              }
+            }
+            const groups = {};
+            for (const n of nodes) {
+              const d = depth.get(n.id) || 0;
+              if (!groups[d]) groups[d] = [];
+              groups[d].push(n);
+            }
+            const ds = Object.keys(groups).map(Number).sort((a,b)=>a-b);
+            const laid = [];
+            for (const d of ds) {
+              const arr = groups[d];
+              arr.sort((a,b)=> String(a.category||'').localeCompare(String(b.category||'')) || String(a.name||'').localeCompare(String(b.name||'')) );
+              for (let i=0;i<arr.length;i++) {
+                const n = arr[i];
+                const x = (typeof n.x === "number") ? n.x : (80 + d * 280);
+                const y = (typeof n.y === "number") ? n.y : (80 + i * 96);
+                laid.push({ ...n, _x: x, _y: y });
+              }
+            }
+            if (laid.length !== nodes.length) {
+              // fallback
+              return nodes.map((n, i) => {
+                const x = (typeof n.x === "number") ? n.x : (80 + (i % 3) * 280);
+                const y = (typeof n.y === "number") ? n.y : (80 + Math.floor(i / 3) * 96);
+                return { ...n, _x: x, _y: y };
+              });
+            }
+            return laid;
+          }
+
+          function renderDag() {
+            if (!dagEl.value) return;
+            if (!dagChart) dagChart = echarts.init(dagEl.value);
+            if (!selectedTask.value) { dagChart.clear(); return; }
+            normalizePipeline();
+            const p = selectedTask.value.pipeline;
+            const nodes = computeLayout(p.nodes || [], p.edges || []);
+            const data = nodes.map((n) => ({
+              id: n.id,
+              name: n.name || n.id,
+              x: n._x,
+              y: n._y,
+              value: n.category,
+              symbolSize: 56,
+              draggable: true,
+              itemStyle: { color: n.category === "source" ? "#06b6d4" : (n.category === "sink" ? "#22c55e" : "#7c3aed") },
+              label: { show: true, color: "#0f172a", formatter: (p) => p.data.name, fontWeight: 800 },
+            }));
+            const links = (p.edges || []).map((e) => ({ source: e.source, target: e.target, lineStyle: { color: "rgba(15,23,42,0.25)", width: 2 } }));
+            const option = {
+              tooltip: { trigger: "item" },
+              series: [{
+                type: "graph",
+                layout: "none",
+                data,
+                links,
+                roam: true,
+                label: { position: "bottom" },
+                edgeSymbol: ["circle", "arrow"],
+                edgeSymbolSize: [4, 10],
+                lineStyle: { curveness: 0.2 },
+              }],
+            };
+            dagChart.setOption(option, true);
+            dagChart.off("click");
+            dagChart.on("click", (params) => {
+              if (!params || params.dataType !== "node") return;
+              const id = params.data && params.data.id;
+              const node = (p.nodes || []).find((n) => n.id === id);
+              if (!node) return;
+              editingNode.value = JSON.parse(JSON.stringify(node));
+              editingNodeParamsText.value = JSON.stringify(node.params || {}, null, 2);
+              nodeDrawerOpen.value = true;
+            });
+          }
+
+          function onDragStart(kind, ev) {
+            dragKind.value = kind;
+            try {
+              ev.dataTransfer.setData("text/plain", kind);
+              ev.dataTransfer.effectAllowed = "copy";
+            } catch {}
+          }
+
+          function addNodeAt(kind, x, y) {
+            if (!selectedTask.value) return;
+            normalizePipeline();
+            if (!kind) return;
+            const id = "n_" + Math.random().toString(16).slice(2, 10);
+            const category = kind.includes("source") ? "source" : (kind.includes("sink") ? "sink" : "transform");
+            const nameMap = {
+              kafka_source: "Kafka实时源",
+              cleanse: "字段清洗",
+              window_agg: "窗口聚合",
+              geo_cleanse: "轨迹清洗/纠偏",
+              warehouse_sink: "主题库写入",
+              ods_sink: "ODS写入",
+              push_sink: "指挥大屏推送",
+            };
+            const px = (typeof x === "number") ? Math.round(x) : (140 + Math.round(Math.random() * 320));
+            const py = (typeof y === "number") ? Math.round(y) : (120 + Math.round(Math.random() * 240));
+            selectedTask.value.pipeline.nodes.push({
+              id,
+              category,
+              kind,
+              name: (nameMap[kind] || kind) + "-" + id.slice(-3),
+              params: {},
+              x: Math.max(40, px),
+              y: Math.max(40, py),
+            });
+            nextTick(renderDag);
+          }
+
+          function onDrop(ev) {
+            dragOver.value = false;
+            const kind = dragKind.value || (ev.dataTransfer ? ev.dataTransfer.getData("text/plain") : "");
+            if (!kind) return;
+            let x = undefined;
+            let y = undefined;
+            try {
+              const rect = dagEl.value.getBoundingClientRect();
+              x = ev.clientX - rect.left;
+              y = ev.clientY - rect.top;
+            } catch {}
+            addNodeAt(kind, x, y);
+            dragKind.value = "";
+          }
+
+          function addEdge() {
+            normalizePipeline();
+            if (!edgeSource.value || !edgeTarget.value || edgeSource.value === edgeTarget.value) return;
+            const exists = selectedTask.value.pipeline.edges.some((e) => e.source === edgeSource.value && e.target === edgeTarget.value);
+            if (!exists) selectedTask.value.pipeline.edges.push({ source: edgeSource.value, target: edgeTarget.value });
+            edgeSource.value = "";
+            edgeTarget.value = "";
+            nextTick(renderDag);
+          }
+
+          function saveNode() {
+            try {
+              const t = selectedTask.value;
+              if (!t) return;
+              normalizePipeline();
+              const p = t.pipeline;
+              const node = editingNode.value;
+              if (!node) return;
+              let params = {};
+              try { params = JSON.parse(editingNodeParamsText.value || "{}"); } catch { params = {}; }
+              const idx = (p.nodes || []).findIndex((n) => n.id === node.id);
+              if (idx >= 0) {
+                p.nodes[idx] = { ...node, params };
+                editingNode.value = null;
+                nodeDrawerOpen.value = false;
+                nextTick(renderDag);
+              }
+            } catch (e) {
+              antd.message.error("保存节点失败");
+            }
+          }
+
+          async function saveTask() {
+            if (!selectedTask.value) return;
+            normalizePipeline();
+            try {
+              const res = await apiFetch(`/tasks/${selectedTask.value.id}`, { method: "PATCH", body: JSON.stringify(selectedTask.value) });
+              selectedTask.value = res.data;
+              await refresh();
+              antd.message.success("已保存");
+            } catch (e) {
+              antd.message.error(e.message || "保存失败");
+            }
+          }
+
+          async function saveVersion() {
+            if (!selectedTask.value) return;
+            versionSaving.value = true;
+            try {
+              const res = await apiFetch(`/tasks/${selectedTask.value.id}/versions`, { method: "POST", body: JSON.stringify({ comment: versionComment.value }) });
+              selectedTask.value = res.data;
+              versions.value = (res.data.versions || []).slice().sort((a,b)=> (b.version||0)-(a.version||0));
+              versionComment.value = "";
+              antd.message.success("版本已生成");
+            } catch (e) {
+              antd.message.error(e.message || "保存版本失败");
+            } finally {
+              versionSaving.value = false;
+            }
+          }
+
+          async function rollback(version) {
+            if (!selectedTask.value) return;
+            try {
+              const res = await apiFetch(`/tasks/${selectedTask.value.id}/rollback`, { method: "POST", body: JSON.stringify({ version }) });
+              selectedTask.value = res.data;
+              versions.value = (res.data.versions || []).slice().sort((a,b)=> (b.version||0)-(a.version||0));
+              await nextTick();
+              renderDag();
+              antd.message.success("已回滚并生成新版本");
+            } catch (e) {
+              antd.message.error(e.message || "回滚失败");
+            }
+          }
+
+          async function refreshRuns() {
+            if (!selectedTask.value) return;
+            try {
+              const res = await apiFetch(`/tasks/${selectedTask.value.id}/runs`);
+              runs.value = res.data || [];
+              if (!selectedRunId.value && runs.value.length) {
+                await selectRun(runs.value[0].id);
+              }
+            } catch {}
+          }
+
+          async function startRun() {
+            if (!selectedTask.value) return;
+            runStarting.value = true;
+            try {
+              const res = await apiFetch(`/tasks/${selectedTask.value.id}/runs`, { method: "POST" });
+              const runId = res.data && res.data.run_id;
+              await refreshRuns();
+              if (runId) await selectRun(runId);
+              const effects = (res.data && res.data.effects) || [];
+              if (effects.length) {
+                for (const e of effects) {
+                  if (e && e.message) antd.message.success(e.message);
+                }
+              } else {
+                antd.message.success("任务已启动");
+              }
+            } catch (e) {
+              antd.message.error(e.message || "启动失败");
+            } finally {
+              runStarting.value = false;
+            }
+          }
+
+          async function selectRun(id) {
+            selectedRunId.value = id;
+            await refreshRun();
+            startPolling();
+          }
+
+          async function refreshRun() {
+            if (!selectedRunId.value) return;
+            try {
+              const res = await apiFetch(`/runs/${selectedRunId.value}`);
+              runView.value = res.data.run;
+              runLogs.value = res.data.logs || [];
+              if (res.data.finished && runPoll.value) {
+                clearInterval(runPoll.value);
+                runPoll.value = null;
+              }
+            } catch (e) {
+              antd.message.error(e.message || "拉取运行信息失败");
+            }
+          }
+
+          function startPolling() {
+            if (runPoll.value) return;
+            runPoll.value = setInterval(async () => {
+              if (!selectedRunId.value) return;
+              await refreshRun();
+            }, 900);
+          }
+
+          async function doCreate() {
+            creating.value = true;
+            try {
+              const res = await apiFetch("/tasks", { method: "POST", body: JSON.stringify(createForm.value) });
+              showCreate.value = false;
+              await refresh();
+              if (res.data && res.data.id) await selectTask(res.data.id);
+              antd.message.success("任务已创建");
+            } catch (e) {
+              antd.message.error(e.message || "创建失败");
+            } finally {
+              creating.value = false;
+            }
+          }
+
+          async function loadSources() {
+            sourceModalOpen.value = true;
+            try {
+              const res = await apiFetch("/sources");
+              sources.value = res.data || [];
+            } catch {
+              sources.value = [];
+            }
+          }
+
+          async function simulate() {
+            simulating.value = true;
+            try {
+              const res = await apiFetch("/simulate/linkage", { method: "POST", body: JSON.stringify({}) });
+              simulateResult.value = res.data || null;
+              simulateModalOpen.value = true;
+            } catch (e) {
+              antd.message.error(e.message || "模拟失败");
+            } finally {
+              simulating.value = false;
+            }
+          }
+
+          watch(activeTab, async (k) => {
+            if (k === "pipeline") await nextTick(renderDag);
+          });
+
+          window.addEventListener("resize", () => { try { if (dagChart) dagChart.resize(); } catch {} });
+
+          onMounted(async () => {
+            applyBrandToShell(brand.value);
+            window.addEventListener("smartask-auth-required", () => {
+              showLogin.value = true;
+            });
+            await refreshMe();
+            if (!me.value) {
+              showLogin.value = true;
+              return;
+            }
+            await refresh();
+            await nextTick(renderDag);
+          });
+
+          return {
+            busy,
+            me,
+            brand,
+            showLogin,
+            login,
+            loginError,
+            doLogin,
+            logout,
+            tasks,
+            keyword,
+            statusFilter,
+            statusOptions,
+            statusColor,
+            statusText,
+            filteredTasks,
+            selectedTask,
+            selectTask,
+            fmtTime,
+
+            activeTab,
+            versions,
+            versionComment,
+            versionSaving,
+            saveVersion,
+            rollback,
+
+            runColumns,
+            runs,
+            runTableData,
+            runStarting,
+            startRun,
+            selectedRunId,
+            runView,
+            runLogs,
+            runLogText,
+            refreshRun,
+            selectRun,
+
+            dagEl,
+            nodeIdOptions,
+            edgeSource,
+            edgeTarget,
+            addEdge,
+            nodeDrawerOpen,
+            editingNode,
+            editingNodeParamsText,
+            saveNode,
+            saveTask,
+
+            showCreate,
+            creating,
+            createForm,
+            taskTypeOptions,
+            doCreate,
+
+            restartOptions,
+
+            sourceModalOpen,
+            sources,
+            loadSources,
+
+            linkageEnabledNames,
+            simulate,
+            simulating,
+            simulateModalOpen,
+            simulateResult,
+
+            refresh,
+            back,
+            confirmReset,
+
+            palette,
+            dragOver,
+            onDragStart,
+            onDrop,
+            addNodeAt,
+          };
+        },
+      });
+
+      try {
+        app.use(antd);
+        app.mount("#app");
+        const el = document.getElementById("app");
+        if (el) el.removeAttribute("v-cloak");
+      } catch (e) {
+        try {
+          const msg = (e && (e.message || e.toString())) || "未知错误";
+          const loading = document.querySelector(".boot-loading");
+          if (loading) loading.textContent = `加载失败：${msg}`;
+        } catch {}
+      }
+    </script>
+  </body>
+</html>
+{% endraw %}

@@ -1,0 +1,33 @@
+{
+  "name": "aistaff",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI 员工（本地 Agent + 可选 Gateway）",
+  "bin": {
+    "aistaff": "dist/cli.js"
+  },
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "dev:cli": "tsx src/cli.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "dotenv": "^17.0.0",
+    "ulid": "^3.0.0",
+    "ws": "^8.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

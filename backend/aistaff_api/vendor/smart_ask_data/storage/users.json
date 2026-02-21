@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password_hash": "pbkdf2_sha256$120000$LcBzrLTh3RjMtZ1jlJ2OEbUYdsfUshIHDQmlp0vFgX5Jxd-hnMflsMz2nE1QuVKg",
+      "role": "admin",
+      "allowed_datasource_ids": [
+        "*"
+      ]
+    }
+  ]
+}

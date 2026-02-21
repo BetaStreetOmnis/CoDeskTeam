@@ -1,0 +1,18 @@
+node_modules
+dist
+.DS_Store
+.env
+.aistaff
+outputs/
+tmp_*
+AGENTS.md
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.python-version
+
+# Frontend
+frontend/node_modules
+frontend/dist
