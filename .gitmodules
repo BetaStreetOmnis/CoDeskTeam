@@ -1,0 +1,3 @@
+[submodule "third_party/openclaw"]
+	path = third_party/openclaw
+	url = https://github.com/moltbot/moltbot.git
