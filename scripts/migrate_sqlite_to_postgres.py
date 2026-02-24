@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Migrate aistaff SQLite data into PostgreSQL."""
+"""Migrate jetlinks-ai SQLite data into PostgreSQL."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ import os
 import sqlite3
 from typing import Iterable
 
-from backend.aistaff_api.config import load_settings
-from backend.aistaff_api.db import init_db
+from backend.jetlinks_ai_api.config import load_settings
+from backend.jetlinks_ai_api.db import init_db
 
 try:
     import asyncpg  # type: ignore
@@ -81,7 +81,7 @@ async def reset_sequence(pg: asyncpg.Connection, table: str) -> None:
 
 
 async def run(sqlite_path: str, pg_url: str) -> None:
-    os.environ["AISTAFF_DB_URL"] = pg_url
+    os.environ["JETLINKS_AI_DB_URL"] = pg_url
     settings = load_settings()
     await init_db(settings)
 
@@ -107,7 +107,7 @@ async def run(sqlite_path: str, pg_url: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Migrate aistaff SQLite data to PostgreSQL")
+    parser = argparse.ArgumentParser(description="Migrate jetlinks-ai SQLite data to PostgreSQL")
     parser.add_argument("--sqlite", required=True, help="Path to sqlite db")
     parser.add_argument("--pg", required=True, help="PostgreSQL URL")
     args = parser.parse_args()

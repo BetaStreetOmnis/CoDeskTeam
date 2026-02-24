@@ -5,7 +5,7 @@
             <div>
               <div class="modalTitle">项目/工作区管理</div>
               <div class="subtle">
-                路径需存在，且位于服务端 AISTAFF_PROJECTS_ROOT 白名单内（默认等于 AISTAFF_WORKSPACE）
+                路径需存在，且位于服务端 JETLINKS_AI_PROJECTS_ROOT 白名单内（默认等于 JETLINKS_AI_WORKSPACE）
               </div>
             </div>
             <button class="ghostBtn" type="button" @click="showProjectModal = false">关闭</button>
@@ -21,7 +21,7 @@
                 v-model="teamWorkspaceDraft"
                 class="input"
                 :disabled="!canEditTeamProjects"
-                placeholder="留空则使用服务端 AISTAFF_WORKSPACE"
+                placeholder="留空则使用服务端 JETLINKS_AI_WORKSPACE"
               />
             </div>
             <div class="row">
@@ -39,7 +39,7 @@
               <button class="ghostBtn" :disabled="teamSettingsBusy" type="button" @click="refreshTeamSettings">刷新</button>
             </div>
             <div class="subtle mono pathLine">
-              当前：{{ teamWorkspacePath ?? "（未设置，回退到服务端 AISTAFF_WORKSPACE）" }}
+              当前：{{ teamWorkspacePath ?? "（未设置，回退到服务端 JETLINKS_AI_WORKSPACE）" }}
             </div>
             <div v-if="teamSettingsError" class="error">{{ teamSettingsError }}</div>
           </div>

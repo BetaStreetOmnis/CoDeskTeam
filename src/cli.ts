@@ -105,7 +105,7 @@ async function chatLocal(options: { role: string; configOverrides: Partial<Retur
 async function main() {
   const program = new Command()
 
-  program.name("aistaff").description("AI 员工（本地 Agent + 可选 Gateway）").version("0.1.0")
+  program.name("jetlinks-ai").description("JetLinks AI（本地 Agent + 可选 Gateway）").version("0.1.0")
 
   const withCommonOptions = (cmd: Command) =>
     cmd

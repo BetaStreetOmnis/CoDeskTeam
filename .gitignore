@@ -3,6 +3,7 @@ dist
 .DS_Store
 .env
 .aistaff
+.jetlinks-ai
 outputs/
 tmp_*
 AGENTS.md

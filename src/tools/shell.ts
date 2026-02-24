@@ -24,7 +24,7 @@ export function createShellTools(): ToolDefinition[] {
     inputSchema: ShellRunInput,
     handler: async (input, ctx) => {
       if (!ctx.enableShell) {
-        throw new Error("shell_run is disabled. Set AISTAFF_ENABLE_SHELL=1 to enable.")
+        throw new Error("shell_run is disabled. Set JETLINKS_AI_ENABLE_SHELL=1 to enable.")
       }
       const result = await runCommand(input.command, {
         cwd: ctx.workspaceRoot,
@@ -37,4 +37,3 @@ export function createShellTools(): ToolDefinition[] {
 
   return [shell_run]
 }
-

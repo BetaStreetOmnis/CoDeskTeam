@@ -7,7 +7,7 @@
             <label class="select wide">
               <span class="label">项目</span>
               <select v-model.number="activeProjectId" @change="onSwitchProject">
-                <option :value="0">{{ teamWorkspacePath ? "团队工作区（默认）" : "默认（AISTAFF_WORKSPACE）" }}</option>
+                <option :value="0">{{ teamWorkspacePath ? "团队工作区（默认）" : "默认（JETLINKS_AI_WORKSPACE）" }}</option>
                 <option v-for="p in teamProjects" :key="`quick-project-${p.id}`" :value="p.id" :disabled="!p.enabled">
                   {{ p.name }}{{ p.enabled ? "" : "（禁用）" }}
                 </option>
@@ -49,16 +49,16 @@
             <div v-else class="historyList workspaceList">
               <div class="historyItem workspaceListItem" :class="{ active: activeProjectId === 0, projectTreeExpanded: projectTreeExpandedById[0] }">
                 <div class="historyItemMain workspaceListMain">
-                  <div class="historyTitle">{{ teamWorkspacePath ? "团队工作区（默认）" : "默认工作区（AISTAFF_WORKSPACE）" }}</div>
+                  <div class="historyTitle">{{ teamWorkspacePath ? "团队工作区（默认）" : "默认工作区（JETLINKS_AI_WORKSPACE）" }}</div>
                   <div class="historyMetaRow">
                     <span class="metaPill">默认入口</span>
                     <span>{{ teamWorkspacePath ? "团队自定义路径" : "服务端默认路径" }}</span>
                   </div>
                   <div
                     class="subtle mono pathLine"
-                    :title="activeWorkspacePath || teamWorkspacePath || '服务端 AISTAFF_WORKSPACE（默认）'"
+                    :title="activeWorkspacePath || teamWorkspacePath || '服务端 JETLINKS_AI_WORKSPACE（默认）'"
                   >
-                    {{ activeWorkspacePath || teamWorkspacePath || "服务端 AISTAFF_WORKSPACE（默认）" }}
+                    {{ activeWorkspacePath || teamWorkspacePath || "服务端 JETLINKS_AI_WORKSPACE（默认）" }}
                   </div>
                 </div>
                 <div class="historyActions">
@@ -525,7 +525,7 @@
 
             <div class="capFoot">
               <div class="subtle" v-if="provider !== 'codex'">无沙箱仅 Codex 可用</div>
-              <div class="subtle" v-else>无沙箱需服务端开启 AISTAFF_CODEX_ALLOW_DANGEROUS=1</div>
+              <div class="subtle" v-else>无沙箱需服务端开启 JETLINKS_AI_CODEX_ALLOW_DANGEROUS=1</div>
             </div>
           </section>
 
@@ -716,7 +716,7 @@
           <section v-if="leftNavSection === 'workspace' && workspacePanel === 'browser'" class="card">
             <div class="cardHead">
               <h3><span class="msIcon h3Icon" aria-hidden="true">travel_explore</span>浏览器</h3>
-              <div class="subtle">AISTAFF_ENABLE_BROWSER=1 + Playwright</div>
+              <div class="subtle">JETLINKS_AI_ENABLE_BROWSER=1 + Playwright</div>
             </div>
             <div class="row">
               <input v-model="browserUrl" class="input" placeholder="https://example.com" />

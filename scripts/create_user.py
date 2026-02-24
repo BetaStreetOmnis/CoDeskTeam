@@ -93,7 +93,7 @@ def upsert_postgres(*, db_url: str, email: str, name: str, password_hash: str, n
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create or update aistaff user")
+    parser = argparse.ArgumentParser(description="Create or update jetlinks-ai user")
     parser.add_argument("--email", required=True)
     parser.add_argument("--name", required=True)
     parser.add_argument("--password", required=True)
@@ -114,18 +114,20 @@ def main() -> None:
     now = utc_now_iso()
     pwd_hash = hash_password(password)
 
-    db_url = (os.getenv("AISTAFF_DB_URL") or "").strip()
+    db_url = (os.getenv("JETLINKS_AI_DB_URL") or os.getenv("AISTAFF_DB_URL") or "").strip()
     if db_url.lower().startswith("postgres"):
         upsert_postgres(db_url=db_url, email=email, name=name, password_hash=pwd_hash, now=now)
         print(f"ok (postgres): {email}")
         return
 
     repo_root = Path(__file__).resolve().parents[1]
-    db_path = Path(os.getenv("AISTAFF_DB_PATH") or (repo_root / ".aistaff" / "aistaff.db"))
+    default_db_path = repo_root / ".jetlinks-ai" / "jetlinks_ai.db"
+    if (repo_root / ".aistaff" / "aistaff.db").exists() and not default_db_path.exists():
+        default_db_path = repo_root / ".aistaff" / "aistaff.db"
+    db_path = Path(os.getenv("JETLINKS_AI_DB_PATH") or os.getenv("AISTAFF_DB_PATH") or str(default_db_path))
     upsert_sqlite(db_path=db_path.expanduser().resolve(), email=email, name=name, password_hash=pwd_hash, now=now)
     print(f"ok (sqlite): {email}")
 
 
 if __name__ == "__main__":
     main()
-

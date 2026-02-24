@@ -12,80 +12,6 @@ wheels = [
 ]
 
 [[package]]
-name = "aistaff-api"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "aiosqlite" },
-    { name = "alembic" },
-    { name = "asyncpg" },
-    { name = "cryptography" },
-    { name = "email-validator" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "itsdangerous" },
-    { name = "jinja2" },
-    { name = "openpyxl" },
-    { name = "passlib", extra = ["bcrypt"] },
-    { name = "psycopg", extra = ["binary"] },
-    { name = "pydantic" },
-    { name = "pyjwt" },
-    { name = "pymysql" },
-    { name = "python-docx" },
-    { name = "python-dotenv" },
-    { name = "python-multipart" },
-    { name = "python-pptx" },
-    { name = "sqlalchemy" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.optional-dependencies]
-browser = [
-    { name = "playwright" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiosqlite", specifier = ">=0.21" },
-    { name = "alembic", specifier = ">=1.13" },
-    { name = "asyncpg", specifier = ">=0.29" },
-    { name = "cryptography", specifier = ">=41.0.0" },
-    { name = "email-validator", specifier = ">=2.1" },
-    { name = "fastapi", specifier = ">=0.110" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "itsdangerous", specifier = ">=2.1" },
-    { name = "jinja2", specifier = ">=3.1" },
-    { name = "openpyxl", specifier = ">=3.1.2" },
-    { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
-    { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.40" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.1" },
-    { name = "pydantic", specifier = ">=2.6" },
-    { name = "pyjwt", specifier = ">=2.10" },
-    { name = "pymysql", specifier = ">=1.1" },
-    { name = "python-docx", specifier = ">=1.1.2" },
-    { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "python-pptx", specifier = ">=0.6.23" },
-    { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27" },
-]
-provides-extras = ["browser"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23" },
-    { name = "ruff", specifier = ">=0.5" },
-]
-
-[[package]]
 name = "alembic"
 version = "1.18.4"
 source = { registry = "https://pypi.org/simple" }
@@ -674,6 +600,80 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/9c/cb/8ac0172223afbccb63986cc25049b154ecfb5e85932587206f42317be31d/itsdangerous-2.2.0.tar.gz", hash = "sha256:e0050c0b7da1eea53ffaf149c0cfbb5c6e2e2b69c4bef22c81fa6eb73e5f6173", size = 54410, upload-time = "2024-04-16T21:28:15.614Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/04/96/92447566d16df59b2a776c0fb82dbc4d9e07cd95062562af01e408583fc4/itsdangerous-2.2.0-py3-none-any.whl", hash = "sha256:c6242fc49e35958c8b15141343aa660db5fc54d4f13a1db01a3f5891b98700ef", size = 16234, upload-time = "2024-04-16T21:28:14.499Z" },
+]
+
+[[package]]
+name = "jetlinks-ai-api"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "aiosqlite" },
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "cryptography" },
+    { name = "email-validator" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "itsdangerous" },
+    { name = "jinja2" },
+    { name = "openpyxl" },
+    { name = "passlib", extra = ["bcrypt"] },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic" },
+    { name = "pyjwt" },
+    { name = "pymysql" },
+    { name = "python-docx" },
+    { name = "python-dotenv" },
+    { name = "python-multipart" },
+    { name = "python-pptx" },
+    { name = "sqlalchemy" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+browser = [
+    { name = "playwright" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiosqlite", specifier = ">=0.21" },
+    { name = "alembic", specifier = ">=1.13" },
+    { name = "asyncpg", specifier = ">=0.29" },
+    { name = "cryptography", specifier = ">=41.0.0" },
+    { name = "email-validator", specifier = ">=2.1" },
+    { name = "fastapi", specifier = ">=0.110" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "itsdangerous", specifier = ">=2.1" },
+    { name = "jinja2", specifier = ">=3.1" },
+    { name = "openpyxl", specifier = ">=3.1.2" },
+    { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
+    { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.40" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.1" },
+    { name = "pydantic", specifier = ">=2.6" },
+    { name = "pyjwt", specifier = ">=2.10" },
+    { name = "pymysql", specifier = ">=1.1" },
+    { name = "python-docx", specifier = ">=1.1.2" },
+    { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "python-pptx", specifier = ">=0.6.23" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27" },
+]
+provides-extras = ["browser"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "ruff", specifier = ">=0.5" },
 ]
 
 [[package]]

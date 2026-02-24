@@ -2,7 +2,7 @@
   <div class="app" :class="[theme, vibe, densityClass, { authed: !!me }]">
 	    <div v-if="!authReady" class="splash">
 	      <div class="splashCard">
-	        <div class="logoBig">CoDeskTeam</div>
+	        <div class="logoBig">JetLinks AI</div>
 	        <div class="subtle">正在连接服务…</div>
 	      </div>
 	    </div>
@@ -10,7 +10,7 @@
 	    <div v-else-if="!me" class="loginWrap">
 	      <div class="loginCard">
 	        <div class="loginBrand">
-	          <div class="logoBig">CoDeskTeam</div>
+	          <div class="logoBig">JetLinks AI</div>
 	          <div class="subtle">AI 协作工作台</div>
 	        </div>
 
@@ -114,7 +114,7 @@
 	        <div class="brand">
 	          <div class="logo">
 	            <span class="msIcon brandIcon" aria-hidden="true">note_stack</span>
-	            <span>CoDeskTeam</span>
+	            <span>JetLinks AI</span>
 	          </div>
 	          <div class="tagline">AI 协作工作台</div>
 	        </div>
@@ -362,7 +362,20 @@ const me = ref<MeResponse | null>(null)
 const authToken = ref<string | null>(localStorage.getItem("aistaff_token"))
 setAuthToken(authToken.value)
 
-const authMode = ref<"login" | "register">("login")
+function getInitialAuthMode(): "login" | "register" {
+  try {
+    const params = new URLSearchParams(window.location.search || "")
+    const mode = String(params.get("mode") || "")
+      .trim()
+      .toLowerCase()
+    if (mode === "register" || mode === "signup") return "register"
+  } catch {
+    // ignore
+  }
+  return "login"
+}
+
+const authMode = ref<"login" | "register">(getInitialAuthMode())
 
 const authTeamsBusy = ref(false)
 const authTeamsError = ref<string | null>(null)
@@ -396,9 +409,13 @@ async function refreshAuthTeams() {
   }
 }
 
-watch(authMode, (mode) => {
-  if (mode === "register") refreshAuthTeams()
-})
+watch(
+  authMode,
+  (mode) => {
+    if (mode === "register") refreshAuthTeams()
+  },
+  { immediate: true }
+)
 
 const TEAM_PREF_KEY = "aistaff_team_pref_v1"
 const TEAM_ONBOARDED_KEY = "aistaff_team_onboarded_v1"
@@ -1659,7 +1676,7 @@ function summarizeTrace(events: any[]): string[] {
 
 	    if (type === "opencode_fallback" || type === "nanobot_fallback" || type === "codex_fallback") {
 	      const requested = Array.isArray((ev as any).requested) ? (ev as any).requested.join(",") : ""
-	      steps.push(`已切换：使用 CoDeskTeam 内置生成（${requested || "docs"}）`)
+	      steps.push(`已切换：使用 JetLinks AI 内置生成（${requested || "docs"}）`)
 	      continue
 	    }
 
@@ -2343,7 +2360,7 @@ async function saveTeamWorkspace() {
 async function clearTeamWorkspace() {
   if (!canEditTeamProjects.value) return
   if (!teamWorkspacePath.value) return
-  const ok = confirm("确定清空团队工作区？清空后将回退到服务端默认工作区（AISTAFF_WORKSPACE）。")
+  const ok = confirm("确定清空团队工作区？清空后将回退到服务端默认工作区（JETLINKS_AI_WORKSPACE）。")
   if (!ok) return
   teamWorkspaceDraft.value = ""
   await saveTeamWorkspace()

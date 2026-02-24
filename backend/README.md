@@ -1,4 +1,4 @@
-# CoDeskTeam API (FastAPI)
+# JetLinks AI API (FastAPI)
 
 ## 安装
 
@@ -18,19 +18,19 @@ uv run playwright install chromium
 
 ```bash
 cd backend
-uv run uvicorn aistaff_api.main:app --reload --port 8000
+uv run uvicorn jetlinks_ai_api.main:app --reload --port 8000
 ```
 
 ## 数据库
 
-- 默认：SQLite（`AISTAFF_DB_PATH`，默认 `../.aistaff/aistaff.db`）
-- 生产推荐：Postgres（`AISTAFF_DB_URL=postgresql://user:pass@host:5432/db`）
+- 默认：SQLite（`JETLINKS_AI_DB_PATH`，默认 `../.jetlinks-ai/jetlinks_ai.db`；如检测到旧库则兼容 `../.aistaff/aistaff.db`）
+- 生产推荐：Postgres（`JETLINKS_AI_DB_URL=postgresql://user:pass@host:5432/db`）
 
 ## 迁移（Postgres / Alembic）
 
 ```bash
 cd backend
-# 需要环境变量里有 AISTAFF_DB_URL
+# 需要环境变量里有 JETLINKS_AI_DB_URL
 uv run alembic upgrade head
 ```
 
@@ -38,15 +38,15 @@ uv run alembic upgrade head
 
 ```bash
 cd backend
-uv run pytest
+uv run python -m pytest
 ```
 
 说明：
 
 - 默认会用 Docker 启动临时 Postgres（无需本地安装 Postgres）。
-- 如果想复用已有 Postgres：`AISTAFF_TEST_DB_URL=postgresql://... uv run pytest`
-  - 为防误伤，非 localhost 需要额外加：`AISTAFF_TEST_DB_UNSAFE=1`
-- 可指定测试镜像：`AISTAFF_TEST_PG_IMAGE=postgres:15`
+- 如果想复用已有 Postgres：`JETLINKS_AI_TEST_DB_URL=postgresql://... uv run python -m pytest`
+  - 为防误伤，非 localhost 需要额外加：`JETLINKS_AI_TEST_DB_UNSAFE=1`
+- 可指定测试镜像：`JETLINKS_AI_TEST_PG_IMAGE=postgres:15`
 
 ## API
 
@@ -75,12 +75,12 @@ uv run pytest
   - `GET /api/team/members` / `POST /api/team/members` / `PUT /api/team/members/{user_id}` / `DELETE /api/team/members/{user_id}`
   - `GET /api/team/integrations` / `POST /api/team/integrations/openclaw` / `DELETE /api/team/integrations/{token_id}`
 - 集成（网关入口）：
-  - `POST /api/integrations/openclaw/message`（Header: `x-aistaff-integration-token`）
+  - `POST /api/integrations/openclaw/message`（Header: `x-jetlinks-ai-integration-token`；兼容 `x-aistaff-integration-token`）
 
 ## Pi（pi-mono，可选 Provider）
 
 - 拉取子模块：`git submodule update --init --recursive`
-- 启用：`AISTAFF_ENABLE_PI=1`，然后在 UI 选择 `provider=pi`（或设置 `AISTAFF_PROVIDER=pi`）
-- 依赖：Node.js `>= 20`（或用 Docker：`AISTAFF_PI_BACKEND=docker`）
+- 启用：`JETLINKS_AI_ENABLE_PI=1`，然后在 UI 选择 `provider=pi`（或设置 `JETLINKS_AI_PROVIDER=pi`）
+- 依赖：Node.js `>= 20`（或用 Docker：`JETLINKS_AI_PI_BACKEND=docker`）
 
 环境变量示例见仓库根目录 `.env.example`。

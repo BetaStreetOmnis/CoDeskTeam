@@ -1,7 +1,7 @@
 [project]
-name = "aistaff-api"
+name = "jetlinks-ai-api"
 version = "0.1.0"
-description = "AI 员工 - FastAPI 后端"
+description = "JetLinks AI - FastAPI 后端"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -41,4 +41,4 @@ dev-dependencies = [
 ]
 
 [tool.ruff]
-exclude = ["aistaff_api/vendor"]
+exclude = ["jetlinks_ai_api/vendor"]

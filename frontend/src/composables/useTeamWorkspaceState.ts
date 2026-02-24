@@ -164,7 +164,7 @@ export function useTeamWorkspaceState({ me, formatError, handleUnauthorized, sho
   })
   const activeWorkspaceLabel = computed(() => activeProject.value?.name || (teamWorkspacePath.value ? "团队工作区" : "默认工作区"))
   const activeWorkspacePath = computed(
-    () => activeProject.value?.path || workspaceRootPath.value || teamWorkspacePath.value || "服务端 AISTAFF_WORKSPACE（默认）",
+    () => activeProject.value?.path || workspaceRootPath.value || teamWorkspacePath.value || "服务端 JETLINKS_AI_WORKSPACE（默认）",
   )
 
   function projectTreeFolderKey(projectId: number, relPath: string): string {

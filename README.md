@@ -1,17 +1,21 @@
-# CoDeskTeam
+# JetLinks AI
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-CoDeskTeam is an open-source, self-hosted **AI workspace for small teams and OPCs (one-person companies)**.
+JetLinks AI is an open-source, self-hosted **AI workspace for small teams and OPCs (one-person companies)**.
 You can think of it as a **team-oriented OpenClaw**: chat-driven execution plus team governance, a shared workspace, and deliverable automation.
 
-> Acknowledgements: CoDeskTeam includes optional integration points inspired by the OpenClaw gateway. Thanks to the OpenClaw project and community.
+> Acknowledgements: JetLinks AI includes optional integration points inspired by the OpenClaw gateway. Thanks to the OpenClaw project and community.
 
 - Frontend: Vue 3 + Vite
 - Backend: FastAPI (auth, multi-team isolation, agent orchestration, file & doc services)
 - Built-in: chat + history, uploads/downloads, document generation (PPT/quotation/inspection), prototype generation, Feishu/WeCom webhooks
 - Optional: OpenClaw gateway ingress for multi-channel messaging
 - Secure-by-default: high-risk tools (`shell/write/browser`) are **disabled by default** and must be explicitly enabled
+
+## Screenshot
+
+![JetLinks AI UI](docs/images/screenshot.png)
 
 ## Quick Start
 
@@ -52,7 +56,7 @@ Then set `OPENAI_API_KEY` in `.env` if you want chat/agent capabilities.
 ## Database (SQLite / Postgres)
 
 - Default: SQLite (no extra setup)
-- Production: Postgres via `AISTAFF_DB_URL=postgresql://...`
+- Production: Postgres via `JETLINKS_AI_DB_URL=postgresql://...`
 - Postgres migrations use Alembic:
 
 ```bash
@@ -92,23 +96,23 @@ Note: delivery is currently **single-record mode** — the requirement exists on
 
 A common setup is to maintain a “central reference repo” (standards, templates, SDKs, examples) and let teams reference it as a selectable project/workspace:
 
-- Server allowlist: `AISTAFF_PROJECTS_ROOT` defines which directories teams are allowed to add (defaults to `AISTAFF_WORKSPACE`)
+- Server allowlist: `JETLINKS_AI_PROJECTS_ROOT` defines which directories teams are allowed to add (defaults to `JETLINKS_AI_WORKSPACE`)
 - Team setup (team `owner/admin`): add the central repo path into `team_projects` via “Project/Workspace management” (or use “Quick import” to scan roots)
 - Chat routing:
   - With `project_id`: the backend uses that project’s `path` as the chat `workspace_root` (tools like `fs_list/fs_read/...` run inside it)
-  - Without `project_id`: uses the team workspace (`/api/team/settings`) or falls back to `AISTAFF_WORKSPACE`
+  - Without `project_id`: uses the team workspace (`/api/team/settings`) or falls back to `JETLINKS_AI_WORKSPACE`
 
 Recommendations:
 
 - “Share” the same repo by adding the same path to each team’s `team_projects` (this shares config, not copies files)
-- Keep it secret-free; in production prefer `AISTAFF_ENABLE_WRITE=0` and treat it as read-only
+- Keep it secret-free; in production prefer `JETLINKS_AI_ENABLE_WRITE=0` and treat it as read-only
 
 ## API Example: Generate a quotation (XLSX / DOCX)
 
 Notes:
 
 - The quotation endpoints require auth: `Authorization: Bearer <access_token>`
-- `download_url` is usually a **relative path** (e.g. `/api/files/...`). If you set `AISTAFF_PUBLIC_BASE_URL`, it becomes an absolute URL.
+- `download_url` is usually a **relative path** (e.g. `/api/files/...`). If you set `JETLINKS_AI_PUBLIC_BASE_URL`, it becomes an absolute URL.
 
 ### 1) Login and get a token
 
@@ -179,8 +183,8 @@ git submodule update --init --recursive
 
 ### Pi (pi-mono) provider
 
-- Enable: set `AISTAFF_ENABLE_PI=1`, then select provider `pi` in the UI (or set `AISTAFF_PROVIDER=pi`).
-- Requirements: Node.js `>= 20` (or Docker via `AISTAFF_PI_BACKEND=docker`).
+- Enable: set `JETLINKS_AI_ENABLE_PI=1`, then select provider `pi` in the UI (or set `JETLINKS_AI_PROVIDER=pi`).
+- Requirements: Node.js `>= 20` (or Docker via `JETLINKS_AI_PI_BACKEND=docker`).
 
 ### OpenClaw (gateway webhook)
 
@@ -188,10 +192,10 @@ git submodule update --init --recursive
 
    - `POST /api/team/integrations/openclaw`
 
-2. Send messages from your gateway to CoDeskTeam:
+   2. Send messages from your gateway to JetLinks AI:
 
-   - `POST /api/integrations/openclaw/message`
-   - Header: `x-aistaff-integration-token: <token>`
+       - `POST /api/integrations/openclaw/message`
+       - Header: `x-jetlinks-ai-integration-token: <token>` (legacy `x-aistaff-integration-token` is also accepted)
 
 For now this is a simple HTTP ingress API. You can build a Moltbot plugin/bridge on top of it.
 
@@ -202,7 +206,7 @@ Backend only:
 ```bash
 cd backend
 uv sync
-uv run uvicorn aistaff_api.main:app --reload --port 8000
+uv run uvicorn jetlinks_ai_api.main:app --reload --port 8000
 ```
 
 Frontend only:
@@ -233,9 +237,9 @@ Optional (PPT/PDF preview images):
 Recommended:
 
 - `OPENAI_API_KEY=...`
-- `AISTAFF_PUBLIC_BASE_URL=https://your-domain` (for absolute download links)
-- `AISTAFF_DB_URL=postgresql://user:pass@host:5432/db` (production recommended)
-- (Optional) `AISTAFF_PPT_FONT=Noto Sans CJK SC` (more consistent rendering on Linux)
+- `JETLINKS_AI_PUBLIC_BASE_URL=https://your-domain` (for absolute download links)
+- `JETLINKS_AI_DB_URL=postgresql://user:pass@host:5432/db` (production recommended)
+- (Optional) `JETLINKS_AI_PPT_FONT=Noto Sans CJK SC` (more consistent rendering on Linux)
 
 ### 3) Backend deps + migrations
 
@@ -256,7 +260,7 @@ pnpm -C frontend build
 
 ```bash
 cd backend
-uv run uvicorn aistaff_api.main:app --host 0.0.0.0 --port 8000
+uv run uvicorn jetlinks_ai_api.main:app --host 0.0.0.0 --port 8000
 ```
 
 Open:
@@ -268,27 +272,27 @@ Tests (Postgres):
 
 ```bash
 cd backend
-uv run pytest
+uv run python -m pytest
 ```
 
 Notes:
 
 - By default tests start a temporary Postgres via Docker.
-- To reuse an existing local Postgres, set `AISTAFF_TEST_DB_URL=postgresql://...` before running pytest.
+- To reuse an existing local Postgres, set `JETLINKS_AI_TEST_DB_URL=postgresql://...` before running pytest.
 
 ## Security
 
 Server-side feature flags gate high-risk tools:
 
-- `AISTAFF_ENABLE_SHELL`
-- `AISTAFF_ENABLE_WRITE`
-- `AISTAFF_ENABLE_BROWSER`
+- `JETLINKS_AI_ENABLE_SHELL`
+- `JETLINKS_AI_ENABLE_WRITE`
+- `JETLINKS_AI_ENABLE_BROWSER`
 
 Keep them off unless you trust the environment and users.
 
 Internal signup code (optional):
 
-- `AISTAFF_SHARED_INVITE_TOKEN` enables a **multi-use** registration invite code. Do not expose it to the public internet.
+- `JETLINKS_AI_SHARED_INVITE_TOKEN` enables a **multi-use** registration invite code. Do not expose it to the public internet.
 
 ## License
 

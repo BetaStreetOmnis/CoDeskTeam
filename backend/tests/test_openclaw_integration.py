@@ -24,7 +24,7 @@ async def test_openclaw_integration_message_flow(client, pg_url: str) -> None:  
 
     msg_resp = await client.post(
         "/api/integrations/openclaw/message",
-        headers={"x-aistaff-integration-token": integration_token},
+        headers={"x-jetlinks-ai-integration-token": integration_token},
         json={
             "external_user_id": "whatsapp:+1234567890",
             "external_display_name": "Alice",
@@ -41,7 +41,7 @@ async def test_openclaw_integration_message_flow(client, pg_url: str) -> None:  
 
     msg_resp2 = await client.post(
         "/api/integrations/openclaw/message",
-        headers={"x-aistaff-integration-token": integration_token},
+        headers={"x-jetlinks-ai-integration-token": integration_token},
         json={
             "external_user_id": "whatsapp:+1234567890",
             "external_display_name": "Alice",
@@ -70,4 +70,3 @@ async def test_openclaw_integration_message_flow(client, pg_url: str) -> None:  
             cur.execute("SELECT COUNT(*) FROM chat_messages WHERE session_id = %s", (sid1,))
             # 2 turns => 4 messages (user+assistant each)
             assert int(cur.fetchone()[0]) == 4
-

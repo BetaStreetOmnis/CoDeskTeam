@@ -11,7 +11,7 @@ function isSensitiveResolvedPath(workspaceRoot: string, fullPath: string): boole
   const root = path.resolve(workspaceRoot)
   const rel = path.relative(root, fullPath)
   const parts = rel.split(path.sep).filter(Boolean).map((p) => p.toLowerCase())
-  if (parts.includes(".aistaff")) return true
+  if (parts.includes(".aistaff") || parts.includes(".jetlinks-ai")) return true
 
   const base = path.basename(fullPath).toLowerCase()
   if (SENSITIVE_ENV_FILENAMES.has(base)) return false
@@ -104,7 +104,7 @@ export function createFsTools(): ToolDefinition[] {
     inputSchema: FsWriteInput,
     handler: async (input, ctx) => {
       if (!ctx.enableWrite) {
-        throw new Error("fs_write is disabled. Set AISTAFF_ENABLE_WRITE=1 to enable.")
+        throw new Error("fs_write is disabled. Set JETLINKS_AI_ENABLE_WRITE=1 to enable.")
       }
       const fullPath = resolveWorkspacePath(ctx.workspaceRoot, input.path)
       assertNotSensitivePath(ctx.workspaceRoot, input.path, fullPath)

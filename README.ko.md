@@ -1,14 +1,18 @@
-# CoDeskTeam
+# JetLinks AI
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-CoDeskTeam은 팀을 위한 **자가 호스팅 가능한 AI 워크스페이스**입니다.  
+JetLinks AI은 팀을 위한 **자가 호스팅 가능한 AI 워크스페이스**입니다.  
 **대화(채팅) 기반 실행**과 **팀 단위 운영/거버넌스(권한·격리)**를 중심으로 설계되었습니다.
 
 - 프론트엔드: Vue 3 + Vite
 - 백엔드: FastAPI(인증, 멀티팀 격리, 에이전트 오케스트레이션, 파일/문서 서비스)
 - 내장 기능: 채팅 + 히스토리, 업로드/다운로드, 문서 생성(PPT/견적서/검수서), 프로토타입 생성, Feishu/WeCom Webhook
 - 보안 기본값: 고위험 도구(`shell/write/browser`)는 **기본 비활성화**(필요 시에만 활성화)
+
+## 스크린샷
+
+![JetLinks AI UI](docs/images/screenshot.png)
 
 ## 빠른 시작
 
@@ -49,7 +53,7 @@ cp .env.example .env
 ## 데이터베이스(SQLite / Postgres)
 
 - 기본: SQLite(추가 설정 없음)
-- 운영 권장: `AISTAFF_DB_URL=postgresql://...`로 Postgres 사용
+- 운영 권장: `JETLINKS_AI_DB_URL=postgresql://...`로 Postgres 사용
 - Postgres 마이그레이션(Alembic):
 
 ```bash
@@ -88,23 +92,23 @@ uv run alembic upgrade head
 
 사내 “중앙 레퍼런스 저장소”(규정, 템플릿, SDK, 예제 등)를 유지하고, 각 팀이 선택 가능한 프로젝트/워크스페이스로 참조하는 구성이 가능합니다.
 
-- 서버 허용 목록: `AISTAFF_PROJECTS_ROOT`가 팀이 추가할 수 있는 디렉터리 화이트리스트를 정의합니다(기본값은 `AISTAFF_WORKSPACE`)
+- 서버 허용 목록: `JETLINKS_AI_PROJECTS_ROOT`가 팀이 추가할 수 있는 디렉터리 화이트리스트를 정의합니다(기본값은 `JETLINKS_AI_WORKSPACE`)
 - 팀 설정(팀 `owner/admin`): UI의 “프로젝트/워크스페이스 관리”에서 중앙 저장소 경로를 `team_projects`에 추가(“프로젝트 일괄 가져오기”로 roots 스캔 후 빠르게 추가 가능)
 - 채팅 적용:
   - `project_id` 있음: 해당 프로젝트의 `path`를 `workspace_root`로 사용(`fs_list/fs_read/...` 등의 도구가 그 하위에서 실행)
-  - `project_id` 없음: 팀 워크스페이스(`/api/team/settings`)를 사용하거나, 미설정 시 `AISTAFF_WORKSPACE`로 폴백
+  - `project_id` 없음: 팀 워크스페이스(`/api/team/settings`)를 사용하거나, 미설정 시 `JETLINKS_AI_WORKSPACE`로 폴백
 
 권장:
 
 - 같은 저장소를 “공유”하려면 각 팀의 `team_projects`에 동일한 경로를 추가하면 됩니다(설정만 팀별로 분리되며 파일을 복사하지 않음)
-- 비밀 정보는 두지 말고, 운영 환경에서는 `AISTAFF_ENABLE_WRITE=0`을 기본으로 두어 참조(읽기) 용도로 사용하는 것을 권장합니다
+- 비밀 정보는 두지 말고, 운영 환경에서는 `JETLINKS_AI_ENABLE_WRITE=0`을 기본으로 두어 참조(읽기) 용도로 사용하는 것을 권장합니다
 
 ## API 예시: 견적서 생성(XLSX / DOCX)
 
 참고:
 
 - 견적서 엔드포인트는 인증이 필요합니다: `Authorization: Bearer <access_token>`
-- `download_url`은 보통 **상대 경로**(예: `/api/files/...`)입니다. `AISTAFF_PUBLIC_BASE_URL`을 설정하면 절대 URL로 반환됩니다.
+- `download_url`은 보통 **상대 경로**(예: `/api/files/...`)입니다. `JETLINKS_AI_PUBLIC_BASE_URL`을 설정하면 절대 URL로 반환됩니다.
 
 ### 1) 로그인해서 token 받기
 

@@ -9,8 +9,8 @@ function normalizeProxyHost(host: string | undefined): string {
   return h
 }
 
-const apiHost = normalizeProxyHost(process.env.AISTAFF_API_HOST)
-const apiPort = (process.env.AISTAFF_API_PORT ?? "8000").trim() || "8000"
+const apiHost = normalizeProxyHost(process.env.JETLINKS_AI_API_HOST ?? process.env.AISTAFF_API_HOST)
+const apiPort = (process.env.JETLINKS_AI_API_PORT ?? process.env.AISTAFF_API_PORT ?? "8000").trim() || "8000"
 const apiTarget = `http://${apiHost}:${apiPort}`
 
 export default defineConfig({

@@ -8,6 +8,8 @@ from alembic import context
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
+from jetlinks_ai_api.env_utils import env_str
+
 
 config = context.config
 if config.config_file_name is not None:
@@ -36,12 +38,20 @@ def _normalize_sqlalchemy_url(url: str) -> str:
 
 def _default_sqlite_url() -> str:
     repo_root = Path(__file__).resolve().parents[2]
-    db_path = Path(os.getenv("AISTAFF_DB_PATH") or str(repo_root / ".aistaff" / "aistaff.db")).expanduser().resolve()
+
+    preferred_dir = repo_root / ".jetlinks-ai"
+    legacy_dir = repo_root / ".aistaff"
+    data_dir = preferred_dir if preferred_dir.exists() else legacy_dir if legacy_dir.exists() else preferred_dir
+    default_db_path = data_dir / "jetlinks_ai.db"
+    if data_dir.name == ".aistaff" and (data_dir / "aistaff.db").exists() and not default_db_path.exists():
+        default_db_path = data_dir / "aistaff.db"
+
+    db_path = Path(env_str("DB_PATH", str(default_db_path)) or str(default_db_path)).expanduser().resolve()
     return f"sqlite:///{db_path}"
 
 
 def get_url() -> str:
-    db_url = (os.getenv("AISTAFF_DB_URL") or "").strip()
+    db_url = (env_str("DB_URL", "") or "").strip()
     if db_url:
         return _normalize_sqlalchemy_url(db_url)
     return _default_sqlite_url()
@@ -77,4 +87,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

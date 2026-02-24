@@ -11,6 +11,8 @@ import uuid
 
 import pytest
 
+from jetlinks_ai_api.env_utils import env_str
+
 
 def _is_local_host(host: str) -> bool:
     normalized = (host or "").strip().lower()
@@ -24,11 +26,11 @@ class PostgresContainer:
 
 
 def _start_postgres_container() -> PostgresContainer:
-    container_name = f"aistaff-test-pg-{uuid.uuid4().hex[:10]}"
+    container_name = f"jetlinks-ai-test-pg-{uuid.uuid4().hex[:10]}"
     password = "postgres"
-    db_name = "aistaff_test"
+    db_name = "jetlinks_ai_test"
 
-    image = (os.getenv("AISTAFF_TEST_PG_IMAGE") or "").strip()
+    image = (env_str("TEST_PG_IMAGE", "") or "").strip()
     if not image:
         # Prefer a locally available image to avoid slow/blocked pulls in dev environments.
         candidates = ["postgres:16-alpine", "postgres:16", "postgres:15-alpine", "postgres:15"]
@@ -99,13 +101,13 @@ def _start_postgres_container() -> PostgresContainer:
 
 @pytest.fixture(scope="session")
 def pg_url() -> Iterator[str]:
-    explicit = (os.getenv("AISTAFF_TEST_DB_URL") or "").strip()
+    explicit = (env_str("TEST_DB_URL", "") or "").strip()
     if explicit:
         parsed = urlparse(explicit)
-        if not _is_local_host(parsed.hostname or "") and (os.getenv("AISTAFF_TEST_DB_UNSAFE") or "").strip() != "1":
+        if not _is_local_host(parsed.hostname or "") and (env_str("TEST_DB_UNSAFE", "") or "").strip() != "1":
             raise RuntimeError(
                 "Refusing to run tests against a non-local Postgres URL. "
-                "Set AISTAFF_TEST_DB_UNSAFE=1 if you really mean it."
+                "Set JETLINKS_AI_TEST_DB_UNSAFE=1 (or legacy AISTAFF_TEST_DB_UNSAFE=1) if you really mean it."
             )
         yield explicit
         return
@@ -119,7 +121,7 @@ def pg_url() -> Iterator[str]:
 
 @pytest.fixture(scope="session", autouse=True)
 def _apply_migrations(pg_url: str) -> None:
-    os.environ["AISTAFF_DB_URL"] = pg_url
+    os.environ["JETLINKS_AI_DB_URL"] = pg_url
 
     from alembic import command
     from alembic.config import Config
@@ -162,16 +164,16 @@ def _clean_db(pg_url: str) -> None:
 
 @pytest.fixture
 def app(pg_url: str, tmp_path: Path):
-    os.environ["AISTAFF_DB_URL"] = pg_url
-    os.environ["AISTAFF_DATA_DIR"] = str(tmp_path / "data")
-    os.environ["AISTAFF_OUTPUTS_DIR"] = str(tmp_path / "outputs")
-    os.environ["AISTAFF_JWT_SECRET"] = "test-jwt-secret-0123456789abcdef0123456789abcdef0123456789abcdef"
-    os.environ.setdefault("AISTAFF_ENABLE_SHELL", "0")
-    os.environ.setdefault("AISTAFF_ENABLE_WRITE", "0")
-    os.environ.setdefault("AISTAFF_ENABLE_BROWSER", "0")
+    os.environ["JETLINKS_AI_DB_URL"] = pg_url
+    os.environ["JETLINKS_AI_DATA_DIR"] = str(tmp_path / "data")
+    os.environ["JETLINKS_AI_OUTPUTS_DIR"] = str(tmp_path / "outputs")
+    os.environ["JETLINKS_AI_JWT_SECRET"] = "test-jwt-secret-0123456789abcdef0123456789abcdef0123456789abcdef"
+    os.environ.setdefault("JETLINKS_AI_ENABLE_SHELL", "0")
+    os.environ.setdefault("JETLINKS_AI_ENABLE_WRITE", "0")
+    os.environ.setdefault("JETLINKS_AI_ENABLE_BROWSER", "0")
 
-    from aistaff_api.app_factory import create_app
-    from aistaff_api.config import load_settings
+    from jetlinks_ai_api.app_factory import create_app
+    from jetlinks_ai_api.config import load_settings
 
     settings = load_settings()
     return create_app(settings)
