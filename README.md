@@ -6,7 +6,6 @@ CoDeskTeam is an open-source, self-hosted **AI workspace for small teams and OPC
 You can think of it as a **team-oriented OpenClaw**: chat-driven execution plus team governance, a shared workspace, and deliverable automation.
 
 > Acknowledgements: CoDeskTeam includes optional integration points inspired by the OpenClaw gateway. Thanks to the OpenClaw project and community.
-> Note: the current codebase still uses `aistaff` naming internally (env vars `AISTAFF_*`, Python package `aistaff_api`). This does not affect usage.
 
 - Frontend: Vue 3 + Vite
 - Backend: FastAPI (auth, multi-team isolation, agent orchestration, file & doc services)

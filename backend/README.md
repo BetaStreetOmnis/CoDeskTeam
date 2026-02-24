@@ -1,7 +1,5 @@
 # CoDeskTeam API (FastAPI)
 
-> Note: the Python package name is currently `aistaff_api` and env vars use `AISTAFF_*` for backward compatibility.
-
 ## 安装
 
 ```bash
