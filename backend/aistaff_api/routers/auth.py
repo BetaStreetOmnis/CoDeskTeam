@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
@@ -232,6 +233,84 @@ async def register(req: RegisterRequest, settings=Depends(get_settings), db=Depe
     now_dt = datetime.now(tz=UTC)
     email = str(req.email).strip().lower()
     name = req.name.strip()
+
+    shared_token = (settings.shared_invite_token or "").strip()
+    if shared_token and token_in == shared_token:
+        shared_team_id_raw = (os.getenv("AISTAFF_SHARED_INVITE_TEAM_ID") or "").strip()
+        shared_team_name = (os.getenv("AISTAFF_SHARED_INVITE_TEAM_NAME") or "").strip()
+
+        team_id: int | None = None
+        if shared_team_id_raw:
+            try:
+                team_id = int(shared_team_id_raw)
+            except Exception:
+                team_id = None
+        elif shared_team_name:
+            row = await fetchone(
+                db,
+                "SELECT id FROM teams WHERE name = ? ORDER BY id ASC LIMIT 1",
+                (shared_team_name,),
+            )
+            data = row_to_dict(row)
+            if data:
+                team_id = int(data.get("id") or 0) or None
+
+        if team_id is None:
+            if req.team_id is None:
+                raise HTTPException(status_code=400, detail="请选择团队")
+            team_id = int(req.team_id)
+        else:
+            if req.team_id is not None and int(req.team_id) != int(team_id):
+                raise HTTPException(status_code=400, detail="通用邀请码不属于所选团队")
+
+        role = (os.getenv("AISTAFF_SHARED_INVITE_ROLE") or "member").strip().lower() or "member"
+        if role not in {"admin", "member"}:
+            role = "member"
+        if role == "admin" and (os.getenv("AISTAFF_SHARED_INVITE_ALLOW_ADMIN") or "").strip() != "1":
+            role = "member"
+
+        await db.execute("BEGIN")
+        try:
+            team_row = await fetchone(db, "SELECT id, name FROM teams WHERE id = ?", (int(team_id),))
+            team = row_to_dict(team_row)
+            if not team:
+                raise HTTPException(status_code=404, detail="团队不存在")
+
+            existing_user_row = await fetchone(db, "SELECT id FROM users WHERE email = ?", (email,))
+            if row_to_dict(existing_user_row):
+                raise HTTPException(status_code=400, detail="该邮箱已注册，请直接登录")
+
+            pwd_hash = hash_password(req.password)
+            cur = await db.execute(
+                "INSERT INTO users(email, name, password_hash, created_at) VALUES (?, ?, ?, ?)",
+                (email, name, pwd_hash, now_iso),
+            )
+            user_id = int(cur.lastrowid)
+
+            await db.execute(
+                "INSERT INTO memberships(user_id, team_id, role, created_at) VALUES (?, ?, ?, ?)",
+                (user_id, int(team_id), role, now_iso),
+            )
+
+            await db.commit()
+        except HTTPException:
+            await db.rollback()
+            raise
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+        teams = [{"id": int(team["id"]), "name": str(team.get("name") or "团队"), "role": role}]
+        active_team = teams[0]
+        access_token = create_access_token(
+            settings=settings,
+            user_id=user_id,
+            email=email,
+            team_id=int(team_id),
+            team_role=role,
+        )
+        user_out = {"id": user_id, "email": email, "name": name}
+        return AuthResponse(access_token=access_token, user=user_out, teams=teams, active_team=active_team)
 
     await db.execute("BEGIN")
     try:

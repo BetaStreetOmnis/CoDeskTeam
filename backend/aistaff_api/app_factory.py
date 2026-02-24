@@ -23,10 +23,13 @@ from .routers import (
     feishu,
     files,
     history,
+    integrations_openclaw,
+    meta,
     openai_proxy,
     prototype,
     skills,
     team,
+    team_integrations,
     wecom,
 )
 
@@ -38,7 +41,7 @@ def create_app(settings: Settings) -> FastAPI:
         cleanup_outputs_dir(settings.outputs_dir, ttl_seconds=max(0, int(settings.outputs_ttl_hours)) * 3600)
         yield
 
-    app = FastAPI(title="aistaff-api", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="CoDeskTeam API", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
 
     app.add_middleware(
@@ -49,6 +52,7 @@ def create_app(settings: Settings) -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.include_router(meta.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
     app.include_router(docs.router, prefix="/api")
     app.include_router(files.router, prefix="/api")
@@ -57,10 +61,12 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(skills.router, prefix="/api")
     app.include_router(auth.router, prefix="/api")
     app.include_router(team.router, prefix="/api")
+    app.include_router(team_integrations.router, prefix="/api")
     app.include_router(wecom.router, prefix="/api")
     app.include_router(feishu.router, prefix="/api")
     app.include_router(history.router, prefix="/api")
     app.include_router(chatbi.router, prefix="/api")
+    app.include_router(integrations_openclaw.router, prefix="/api")
     app.include_router(admin_teams.router)
     app.include_router(openai_proxy.router)
 
@@ -121,14 +127,14 @@ def _mount_ui(app: FastAPI, settings: Settings) -> None:
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>aistaff</title>
+    <title>CoDeskTeam</title>
     <style>
       body {{ font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; padding: 24px; }}
       code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 6px; }}
     </style>
   </head>
   <body>
-    <h2>aistaff API 已启动</h2>
+    <h2>CoDeskTeam API 已启动</h2>
     <p>开发模式前端默认在：<a href="{web_url}">{web_url}</a></p>
     <p>Swagger 文档在：<a href="/docs">/docs</a></p>
     <p>如果想让后端直接托管前端构建产物：先在 <code>frontend/</code> 运行 <code>pnpm build</code>，或设置 <code>AISTAFF_UI_DIST_DIR</code>。</p>

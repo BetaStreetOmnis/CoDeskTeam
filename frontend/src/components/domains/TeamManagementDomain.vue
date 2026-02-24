@@ -335,11 +335,12 @@
 	            <label class="select wide">
 	              <span class="label">提供商</span>
 	              <select v-model="provider">
-	                <option value="openai">OpenAI</option>
-	                <option value="codex">Codex CLI</option>
-                <option value="opencode">OpenCode</option>
-                <option value="nanobot">NanoBot</option>
-                <option value="mock">模拟</option>
+	                <option v-if="availableProviders?.includes('openai')" value="openai">OpenAI</option>
+	                <option v-if="availableProviders?.includes('pi')" value="pi">Pi（pi-mono）</option>
+	                <option v-if="availableProviders?.includes('codex')" value="codex">Codex CLI</option>
+                <option v-if="availableProviders?.includes('opencode')" value="opencode">OpenCode</option>
+                <option v-if="availableProviders?.includes('nanobot')" value="nanobot">NanoBot</option>
+                <option v-if="availableProviders?.includes('mock')" value="mock">模拟</option>
               </select>
             </label>
 

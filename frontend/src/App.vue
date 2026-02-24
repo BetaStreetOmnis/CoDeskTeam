@@ -1,18 +1,18 @@
 <template>
   <div class="app" :class="[theme, vibe, densityClass, { authed: !!me }]">
-    <div v-if="!authReady" class="splash">
-      <div class="splashCard">
-        <div class="logoBig">aistaff</div>
-        <div class="subtle">正在连接服务…</div>
-      </div>
-    </div>
+	    <div v-if="!authReady" class="splash">
+	      <div class="splashCard">
+	        <div class="logoBig">CoDeskTeam</div>
+	        <div class="subtle">正在连接服务…</div>
+	      </div>
+	    </div>
 
-    <div v-else-if="!me" class="loginWrap">
-      <div class="loginCard">
-        <div class="loginBrand">
-          <div class="logoBig">aistaff</div>
-          <div class="subtle">AI 员工工作台</div>
-        </div>
+	    <div v-else-if="!me" class="loginWrap">
+	      <div class="loginCard">
+	        <div class="loginBrand">
+	          <div class="logoBig">CoDeskTeam</div>
+	          <div class="subtle">AI 协作工作台</div>
+	        </div>
 
         <div class="loginMeta">
           <div class="pill" :class="apiOk ? 'ok' : 'bad'">
@@ -109,15 +109,15 @@
 	      </div>
 	    </div>
 
-    <template v-else>
-      <header class="top">
-        <div class="brand">
-          <div class="logo">
-            <span class="msIcon brandIcon" aria-hidden="true">note_stack</span>
-            <span>aistaff</span>
-          </div>
-          <div class="tagline">AI 员工工作台</div>
-        </div>
+	    <template v-else>
+	      <header class="top">
+	        <div class="brand">
+	          <div class="logo">
+	            <span class="msIcon brandIcon" aria-hidden="true">note_stack</span>
+	            <span>CoDeskTeam</span>
+	          </div>
+	          <div class="tagline">AI 协作工作台</div>
+	        </div>
 
         <div class="topActions">
           <div class="pill" :class="apiOk ? 'ok' : 'bad'">
@@ -275,7 +275,8 @@ import {
 	  getMe,
 	  importTeamProjects,
 	  listSkills,
-  listTeamFeishuWebhooks,
+	  listTeamFeishuWebhooks,
+	  getMeta,
   runSkill,
   setAuthToken,
   health,
@@ -317,7 +318,7 @@ import type {
 		} from "./api/index"
 
 	type Theme = "light" | "dark"
-	type Provider = "openai" | "mock" | "opencode" | "nanobot" | "codex"
+	type Provider = "openai" | "mock" | "opencode" | "nanobot" | "codex" | "pi"
   type Vibe = "toc" | "pro" | "notebook"
   type RoleMode = "general" | "engineer"
   type SecurityPreset = "safe" | "standard" | "power" | "custom"
@@ -526,9 +527,16 @@ const densityLabel = computed(() => {
   return "标准"
 })
 
+const availableProviders = ref<Provider[]>(["openai", "codex", "opencode", "nanobot", "mock"])
+
 const storedProvider = localStorage.getItem("aistaff_provider")
 const provider = ref<Provider>(
-  storedProvider === "openai" || storedProvider === "opencode" || storedProvider === "nanobot" || storedProvider === "codex"
+  storedProvider === "openai" ||
+    storedProvider === "opencode" ||
+    storedProvider === "nanobot" ||
+    storedProvider === "codex" ||
+    storedProvider === "mock" ||
+    storedProvider === "pi"
     ? storedProvider
     : "opencode",
 )
@@ -1649,11 +1657,11 @@ function summarizeTrace(events: any[]): string[] {
       continue
     }
 
-    if (type === "opencode_fallback" || type === "nanobot_fallback" || type === "codex_fallback") {
-      const requested = Array.isArray((ev as any).requested) ? (ev as any).requested.join(",") : ""
-      steps.push(`已切换：使用 aistaff 内置生成（${requested || "docs"}）`)
-      continue
-    }
+	    if (type === "opencode_fallback" || type === "nanobot_fallback" || type === "codex_fallback") {
+	      const requested = Array.isArray((ev as any).requested) ? (ev as any).requested.join(",") : ""
+	      steps.push(`已切换：使用 CoDeskTeam 内置生成（${requested || "docs"}）`)
+	      continue
+	    }
 
     if (type === "nanobot_start") {
       steps.push("调用引擎：NanoBot")
@@ -2179,7 +2187,8 @@ function loadHistoryIntoChat() {
     detail.session.provider === "opencode" ||
     detail.session.provider === "nanobot" ||
     detail.session.provider === "codex" ||
-    detail.session.provider === "mock"
+    detail.session.provider === "mock" ||
+    detail.session.provider === "pi"
       ? detail.session.provider
       : provider.value
   provider.value = nextProvider
@@ -3658,6 +3667,7 @@ const appDomainCtx = {
   effectiveDensity,
   densityClass,
   densityLabel,
+  availableProviders,
   provider,
   role,
   enableShell,
@@ -3859,6 +3869,20 @@ onMounted(async () => {
       apiOk.value = false
     })
 
+  const metaTask = withTimeout(getMeta(), 4500, "meta")
+    .then((m) => {
+      const raw = Array.isArray(m?.providers) ? m.providers : []
+      const known: Provider[] = ["openai", "codex", "opencode", "nanobot", "mock", "pi"]
+      const next = known.filter((p) => raw.includes(p))
+      if (next.length) availableProviders.value = next
+      if (!availableProviders.value.includes(provider.value)) {
+        provider.value = availableProviders.value[0] ?? "openai"
+      }
+    })
+    .catch(() => {
+      // ignore (use defaults)
+    })
+
   const authTask = withTimeout(authStatus(), 4500, "auth")
     .then((st) => {
       setupRequired.value = !!st.setup_required
@@ -3867,7 +3891,7 @@ onMounted(async () => {
       authError.value = formatAxiosError(e)
     })
 
-  await Promise.allSettled([healthTask, authTask])
+  await Promise.allSettled([healthTask, metaTask, authTask])
 
   const token = authToken.value?.trim()
 	  if (token) {

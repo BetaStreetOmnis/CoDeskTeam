@@ -1,12 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-import os
-from pathlib import Path
-import re
-import shutil
-import subprocess
-import tempfile
 from uuid import uuid4
 
 from docx import Document
@@ -15,11 +9,6 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor as DocxRGBColor
-from pptx import Presentation
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE
-from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
-from pptx.util import Inches, Pt
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -296,9 +285,9 @@ class QuoteDocService:
         cover["A3"].alignment = center
         cover.merge_cells("A3:D3")
 
-        from datetime import datetime
-
-        cover["A5"] = f"报价日期：{datetime.now().strftime('%Y年%m月%d日')}"
+        # Avoid non-ASCII in strftime format (can return empty string on hosts with misconfigured locales).
+        now = datetime.now()
+        cover["A5"] = f"报价日期：{now.year}年{now.month:02d}月{now.day:02d}日"
         cover["A5"].font = normal_font
         cover["C5"] = f"报价单号：{quote_no}"
         cover["C5"].font = normal_font
@@ -430,6 +419,12 @@ class QuoteDocService:
 
         detail.row_dimensions[1].height = 28
         detail.row_dimensions[2].height = 20
+
+        # Open/preview the workbook on the detail sheet by default (cover is still available as another tab).
+        try:
+            wb.active = wb.sheetnames.index(detail.title)
+        except Exception:
+            pass
 
         filename = f"{uuid4().hex}.xlsx"
         path = (self._settings.outputs_dir / filename).resolve()

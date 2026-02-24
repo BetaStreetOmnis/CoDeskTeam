@@ -1,4 +1,6 @@
-# aistaff-api (FastAPI)
+# CoDeskTeam API (FastAPI)
+
+> Note: the Python package name is currently `aistaff_api` and env vars use `AISTAFF_*` for backward compatibility.
 
 ## 安装
 
@@ -64,7 +66,23 @@ uv run pytest
 - `GET /api/skills`（内置技能清单）
 - `GET /api/files/{file_id}`（下载生成的文件）
 - 团队：
+  - `GET/PUT /api/team/settings`（团队工作区）
+  - `GET/POST/PUT/DELETE /api/team/projects`（项目/工作区）
+  - `GET /api/team/projects/discover`（扫描 roots 发现项目）
+  - `POST /api/team/projects/import`（批量导入项目）
   - `GET /api/team/skills` / `POST /api/team/skills` / `PUT /api/team/skills/{id}` / `DELETE /api/team/skills/{id}`
+  - `GET/POST/PUT/DELETE /api/team/requirements`（需求页）
+  - `POST /api/team/requirements/{requirement_id}/accept`（跨团队交付：接收）
+  - `POST /api/team/requirements/{requirement_id}/reject`（跨团队交付：拒绝）
   - `GET /api/team/members` / `POST /api/team/members` / `PUT /api/team/members/{user_id}` / `DELETE /api/team/members/{user_id}`
+  - `GET /api/team/integrations` / `POST /api/team/integrations/openclaw` / `DELETE /api/team/integrations/{token_id}`
+- 集成（网关入口）：
+  - `POST /api/integrations/openclaw/message`（Header: `x-aistaff-integration-token`）
+
+## Pi（pi-mono，可选 Provider）
+
+- 拉取子模块：`git submodule update --init --recursive`
+- 启用：`AISTAFF_ENABLE_PI=1`，然后在 UI 选择 `provider=pi`（或设置 `AISTAFF_PROVIDER=pi`）
+- 依赖：Node.js `>= 20`（或用 Docker：`AISTAFF_PI_BACKEND=docker`）
 
 环境变量示例见仓库根目录 `.env.example`。

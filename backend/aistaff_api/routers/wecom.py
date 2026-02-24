@@ -1,24 +1,47 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import json
+import os
 import secrets
 from typing import Any
+import re
+from pathlib import Path
+from uuid import uuid4
 from xml.etree import ElementTree as ET
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from ..agent.types import ChatMessage
 from ..config import Settings
 from ..db import fetchall, fetchone, open_db, row_to_dict, rows_to_dicts, utc_now_iso
 from ..deps import CurrentUser, get_current_user, get_db, get_settings, require_team_admin
-from ..project_utils import resolve_project_path
+from ..project_utils import resolve_project_path, resolve_user_workspace_root
 from ..services.agent_service import AgentService
+from ..services.auth_service import hash_password
+from ..services.history_file_store import sync_session_snapshot_from_db
+from ..services.team_skill_seed_service import ensure_default_team_skills
 from ..services.wecom_crypto import WecomCrypto
 from ..services.wecom_service import WecomService
+from ..session_store import get_session_store
+from ..url_utils import abs_url
 
 
 router = APIRouter(tags=["wecom"])
+
+_FILE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
+_IMAGE_EXT_BY_MIME = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+_MAX_MEDIA_BYTES = 25 * 1024 * 1024
 
 
 def _safe_text(value: object) -> str:
@@ -57,6 +80,12 @@ def _parse_plain_message(xml_text: str) -> dict[str, str]:
         "chat_id": g("ChatId"),
         "event": g("Event"),
         "event_key": g("EventKey"),
+        "media_id": g("MediaId"),
+        "thumb_media_id": g("ThumbMediaId"),
+        "pic_url": g("PicUrl"),
+        "file_name": g("FileName"),
+        "title": g("Title"),
+        "format": g("Format"),
     }
 
 
@@ -64,6 +93,155 @@ def _callback_url(settings: Settings, hook: str) -> str:
     path = f"/api/wecom/callback/{hook}"
     base = (getattr(settings, "public_base_url", "") or "").strip().rstrip("/")
     return f"{base}{path}" if base else path
+
+
+def _external_email(*, team_id: int, provider: str, external_id: str) -> str:
+    raw = f"{provider}:{team_id}:{external_id}".encode("utf-8", errors="ignore")
+    digest = hashlib.sha256(raw).digest()
+    short = base64.b32encode(digest).decode("ascii").rstrip("=").lower()[:16]
+    return f"ext+{provider}+t{int(team_id)}+{short}@aistaff.local"
+
+
+def _safe_outputs_path(outputs_dir: Path, file_id: str) -> Path:
+    file_id = (file_id or "").strip()
+    if not file_id:
+        raise ValueError("invalid file_id")
+    if not _FILE_ID_RE.match(file_id) or ".." in file_id:
+        raise ValueError("invalid file_id")
+
+    base = outputs_dir.resolve()
+    full = (base / file_id).resolve()
+    if full == base or not str(full).startswith(str(base) + os.sep):
+        raise ValueError("invalid file_id")
+    return full
+
+
+def _safe_ext(filename: str) -> str:
+    ext = Path(filename).suffix.lower() if filename else ""
+    if not ext:
+        return ""
+    safe = "".join(ch for ch in ext if ch.isalnum() or ch in {".", "_", "-"})
+    if not safe.startswith("."):
+        return ""
+    if safe in {"."}:
+        return ""
+    return safe[:16] if len(safe) > 16 else safe
+
+
+def _safe_load_attachments(value: object) -> list[dict]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [x for x in value if isinstance(x, dict)]
+    if isinstance(value, str):
+        try:
+            data = json.loads(value)
+        except Exception:
+            return []
+        return [x for x in data if isinstance(x, dict)] if isinstance(data, list) else []
+    return []
+
+
+def _extract_tool_files(events: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    for ev in events or []:
+        if not isinstance(ev, dict):
+            continue
+        if str(ev.get("type") or "") != "tool_result":
+            continue
+        result = ev.get("result") if isinstance(ev.get("result"), dict) else {}
+        fid = str(result.get("file_id") or "").strip()
+        if not fid:
+            continue
+        filename = str(result.get("filename") or fid).strip() or fid
+        ctype = str(result.get("content_type") or "").strip().lower()
+        out.append(
+            {
+                "file_id": fid,
+                "filename": filename,
+                "content_type": ctype,
+                "kind": "generated",
+            }
+        )
+    return out
+
+
+def _extract_artifact_links(events: list[dict], settings: Settings) -> list[dict[str, str]]:
+    """
+    Extract download/preview links from tool events, so chat apps (WeCom/Feishu) can behave
+    closer to the web UI even if the model forgets to paste the link.
+    """
+
+    items = events or []
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    for ev in items:
+        if not isinstance(ev, dict):
+            continue
+        if str(ev.get("type") or "") != "tool_result":
+            continue
+
+        tool = str(ev.get("tool") or "").strip()
+        result = ev.get("result") if isinstance(ev.get("result"), dict) else {}
+
+        file_id = str(result.get("file_id") or "").strip()
+        filename = str(result.get("filename") or file_id or tool or "").strip()
+
+        download_url = str(result.get("download_url") or "").strip()
+        if download_url:
+            url = abs_url(settings, download_url)
+            if url and url not in seen:
+                out.append({"kind": "download", "label": filename or tool or "文件", "url": url})
+                seen.add(url)
+
+        preview_url = str(result.get("preview_url") or "").strip()
+        if preview_url:
+            url = abs_url(settings, preview_url)
+            if url and url not in seen:
+                out.append({"kind": "preview", "label": "预览", "url": url})
+                seen.add(url)
+
+        preview_image_url = str(result.get("preview_image_url") or "").strip()
+        if preview_image_url:
+            url = abs_url(settings, preview_image_url)
+            if url and url not in seen:
+                out.append({"kind": "preview_image", "label": "封面预览", "url": url})
+                seen.add(url)
+
+    return out
+
+
+def _decorate_assistant_text(*, assistant: str, events: list[dict], settings: Settings) -> str:
+    text = (assistant or "").strip()
+    links = _extract_artifact_links(events, settings)
+    if not links:
+        return text
+
+    # Avoid duplicating URLs if the model already included them.
+    links = [link for link in links if link.get("url") and link["url"] not in text]
+    if not links:
+        return text
+
+    download_lines: list[str] = []
+    preview_lines: list[str] = []
+    for link in links:
+        kind = str(link.get("kind") or "").strip()
+        label = str(link.get("label") or "").strip() or "链接"
+        url = str(link.get("url") or "").strip()
+        if not url:
+            continue
+        if kind == "download":
+            download_lines.append(f"- {label}：{url}")
+        else:
+            preview_lines.append(f"- {label}：{url}")
+
+    parts: list[str] = [text] if text else []
+    if download_lines:
+        parts.append("生成文件：\n" + "\n".join(download_lines))
+    if preview_lines:
+        parts.append("预览：\n" + "\n".join(preview_lines))
+    return "\n\n".join([p for p in parts if p]).strip()
 
 
 async def _build_team_prompt(db, team_id: int) -> str:  # noqa: ANN001
@@ -108,26 +286,287 @@ async def _resolve_team_workspace(settings: Settings, db, team_id: int):  # noqa
     return workspace_root
 
 
-async def _process_wecom_text_message(*, settings: Settings, app: dict[str, Any], message: dict[str, str]) -> None:
+async def _get_or_create_wecom_user(
+    *,
+    db: object,
+    team_id: int,
+    external_id: str,
+    display_name: str | None,
+) -> dict[str, object]:
+    provider = "wecom"
+    ext = (external_id or "").strip()
+    if not ext:
+        raise ValueError("external_id is empty")
+
+    now = utc_now_iso()
+    disp = (display_name or "").strip() or ext
+
+    mapping_row = await fetchone(
+        db,
+        """
+        SELECT user_id
+        FROM external_identities
+        WHERE team_id = ? AND provider = ? AND external_id = ?
+        """,
+        (int(team_id), provider, ext),
+    )
+    mapping = row_to_dict(mapping_row) or {}
+    mapped_user_id = int(mapping.get("user_id") or 0)
+
+    if mapped_user_id > 0:
+        user_row = await fetchone(db, "SELECT id, email, name FROM users WHERE id = ?", (mapped_user_id,))
+        user = row_to_dict(user_row) or {}
+        if user:
+            await db.execute(
+                "UPDATE external_identities SET display_name = ?, updated_at = ? WHERE team_id = ? AND provider = ? AND external_id = ?",
+                (disp, now, int(team_id), provider, ext),
+            )
+            await db.commit()
+            return {"id": int(user["id"]), "email": str(user.get("email") or ""), "name": str(user.get("name") or disp)}
+
+        # Broken mapping; clear and recreate.
+        await db.execute(
+            "DELETE FROM external_identities WHERE team_id = ? AND provider = ? AND external_id = ?",
+            (int(team_id), provider, ext),
+        )
+        await db.commit()
+
+    email = _external_email(team_id=int(team_id), provider=provider, external_id=ext)
+    pwd_hash = hash_password(secrets.token_urlsafe(32))
+
+    await db.execute(
+        "INSERT OR IGNORE INTO users(email, name, password_hash, created_at) VALUES (?, ?, ?, ?)",
+        (email, disp, pwd_hash, now),
+    )
+    user_row = await fetchone(db, "SELECT id, email, name FROM users WHERE email = ?", (email,))
+    user = row_to_dict(user_row) or {}
+    if not user:
+        raise RuntimeError("failed to create external user")
+
+    user_id = int(user["id"])
+    await db.execute(
+        "INSERT OR IGNORE INTO memberships(user_id, team_id, role, created_at) VALUES (?, ?, ?, ?)",
+        (user_id, int(team_id), "member", now),
+    )
+    await db.execute(
+        """
+        INSERT OR IGNORE INTO external_identities(team_id, provider, external_id, user_id, display_name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (int(team_id), provider, ext, user_id, disp, now, now),
+    )
+    await db.commit()
+    return {"id": user_id, "email": str(user.get("email") or ""), "name": str(user.get("name") or disp)}
+
+
+async def _process_wecom_message(*, settings: Settings, app: dict[str, Any], message: dict[str, str]) -> None:
     team_id = int(app["team_id"])
+    corp_id = _safe_text(app.get("corp_id"))
     from_user = _safe_text(message.get("from_user"))
     chat_id = _safe_text(message.get("chat_id")) or None
-    text = _safe_text(message.get("content"))
-    if not from_user or not text:
+    msg_type = _safe_text(message.get("msg_type")).lower()
+    raw_text = _safe_text(message.get("content"))
+    media_id = _safe_text(message.get("media_id"))
+    file_name = _safe_text(message.get("file_name")) or _safe_text(message.get("title"))
+
+    if not from_user:
         return
 
     session_id = f"wecom:{app['hook']}:" + (f"chat:{chat_id}" if chat_id else f"user:{from_user}")
+    msg_id = _safe_text(message.get("msg_id"))
+
+    prefix = f"[{from_user}] " if chat_id else ""
+    attachments: list[dict] = []
+    text = ""
+    if msg_type == "text":
+        if not raw_text:
+            return
+        text = f"{prefix}{raw_text}"
+    elif msg_type in {"image", "file"}:
+        if not media_id:
+            return
+        display = file_name or ("图片" if msg_type == "image" else "文件")
+        text = f"{prefix}发送了一个附件：{display}。请阅读附件并回答。"
+    else:
+        # Ignore other message types for now.
+        return
 
     async with open_db(settings) as db:
+        # Best-effort: dedup callbacks (WeCom may retry).
+        if msg_id:
+            try:
+                event_id = f"{corp_id}:{msg_id}" if corp_id else msg_id
+                now = utc_now_iso()
+                cur = await db.execute(
+                    """
+                    INSERT OR IGNORE INTO external_events(team_id, provider, external_id, session_id, user_id, created_at)
+                    VALUES (?, ?, ?, ?, NULL, ?)
+                    """,
+                    (team_id, "wecom", event_id, session_id, now),
+                )
+                inserted = bool(getattr(cur, "rowcount", 0) or 0)
+                await cur.close()
+                if not inserted:
+                    return
+                await db.commit()
+            except Exception:
+                pass
+
+        # Best-effort: seed defaults for the team (doesn't affect prompts unless enabled).
+        try:
+            await ensure_default_team_skills(db, team_id=team_id)
+        except Exception:
+            pass
+
         team_prompt = await _build_team_prompt(db, team_id)
-        workspace_root = await _resolve_team_workspace(settings, db, team_id)
+
+        team_row = await fetchone(db, "SELECT id, name FROM teams WHERE id = ?", (team_id,))
+        team = row_to_dict(team_row) or {}
+        team_name = str(team.get("name") or f"team-{team_id}")
+
+        # Use per-user chat identity for group chats to avoid session ownership conflicts.
+        if chat_id:
+            external_id = f"{corp_id}:chat:{chat_id}" if corp_id else f"chat:{chat_id}"
+            display = f"WeCom Chat {chat_id}"
+        else:
+            external_id = f"{corp_id}:user:{from_user}" if corp_id else f"user:{from_user}"
+            display = from_user
+
+        try:
+            user_info = await _get_or_create_wecom_user(db=db, team_id=team_id, external_id=external_id, display_name=display)
+        except Exception:
+            return
+
+        user_id = int(user_info.get("id") or 0)
+        user_name = str(user_info.get("name") or "").strip() or display
+        if user_id <= 0:
+            return
+
+        base_workspace = await _resolve_team_workspace(settings, db, team_id)
+        try:
+            workspace_root = resolve_user_workspace_root(
+                settings,
+                Path(base_workspace),
+                team_id,
+                user_id,
+                team_name,
+                user_name,
+            )
+        except Exception:
+            workspace_root = Path(base_workspace)
+
+        # Best-effort: rehydrate in-memory session from DB history (e.g. after server restart).
+        try:
+            store = get_session_store()
+            ttl_seconds = max(0, int(settings.session_ttl_minutes)) * 60
+            try:
+                await store.assert_access(session_id=session_id, user_id=user_id, team_id=team_id, ttl_seconds=ttl_seconds)
+            except Exception:
+                sess_row = await fetchone(
+                    db,
+                    "SELECT session_id FROM chat_sessions WHERE session_id = ? AND team_id = ? AND user_id = ?",
+                    (session_id, team_id, user_id),
+                )
+                if sess_row:
+                    st = await store.get_or_create(
+                        session_id=session_id,
+                        user_id=user_id,
+                        team_id=team_id,
+                        role="general",
+                        system_prompt="(rehydrated)",
+                        workspace_root=str(workspace_root),
+                        ttl_seconds=ttl_seconds,
+                        max_sessions=max(0, int(settings.max_sessions)),
+                    )
+                    msg_rows = await fetchall(
+                        db,
+                        """
+                        SELECT role, content, attachments_json
+                        FROM chat_messages
+                        WHERE session_id = ? AND team_id = ? AND user_id = ?
+                        ORDER BY id ASC
+                        """,
+                        (session_id, team_id, user_id),
+                    )
+                    msgs: list[ChatMessage] = [ChatMessage(role="system", content=(st.messages[0].content if st.messages else ""))]
+                    for r in msg_rows:
+                        d = row_to_dict(r) or {}
+                        role_name = str(d.get("role") or "").strip()
+                        if role_name not in {"user", "assistant"}:
+                            continue
+                        atts = _safe_load_attachments(d.get("attachments_json"))
+                        msgs.append(
+                            ChatMessage(
+                                role=role_name,  # type: ignore[arg-type]
+                                content=str(d.get("content") or ""),
+                                attachments=atts or None,
+                            )
+                        )
+                    await store.update_messages(
+                        session_id=session_id,
+                        user_id=user_id,
+                        team_id=team_id,
+                        messages=msgs,
+                        max_messages=max(0, int(settings.max_session_messages)),
+                        max_chars=max(0, int(settings.max_context_chars)),
+                    )
+        except Exception:
+            pass
+
+    # Fetch media attachment (best-effort; avoid holding DB connection during download).
+    if msg_type in {"image", "file"}:
+        svc = WecomService()
+        try:
+            data, ctype, header_name = await svc.download_media(
+                corp_id=str(app["corp_id"]),
+                corp_secret=str(app["corp_secret"]),
+                media_id=media_id,
+            )
+            if not data:
+                raise ValueError("empty media")
+            if len(data) > _MAX_MEDIA_BYTES:
+                raise ValueError("media too large")
+
+            filename_in = file_name or (header_name or "") or f"{msg_type}-{msg_id or media_id}"
+            ext = _safe_ext(filename_in)
+            if not ext and ctype in _IMAGE_EXT_BY_MIME:
+                ext = _IMAGE_EXT_BY_MIME[ctype]
+
+            file_id = f"{uuid4().hex}{ext}" if ext else uuid4().hex
+            settings.outputs_dir.mkdir(parents=True, exist_ok=True)
+            path = _safe_outputs_path(settings.outputs_dir, file_id)
+            path.write_bytes(data)
+
+            kind = "image" if ctype.startswith("image/") else "file"
+            attachments = [
+                {
+                    "file_id": file_id,
+                    "filename": filename_in or file_id,
+                    "content_type": ctype,
+                    "kind": kind,
+                }
+            ]
+        except Exception:
+            # If we can't fetch the media, inform user (best-effort) and stop.
+            try:
+                await svc.send_text(
+                    corp_id=str(app["corp_id"]),
+                    corp_secret=str(app["corp_secret"]),
+                    agent_id=int(app["agent_id"]),
+                    to_user=None if chat_id else from_user,
+                    chat_id=chat_id,
+                    content="附件获取失败（可能已过期或权限不足），请重新发送或稍后再试。",
+                )
+            except Exception:
+                pass
+            return
 
     agent = AgentService(settings)
     result = await agent.chat(
         message=text,
         session_id=session_id,
         role="general",
-        user_id=0,
+        user_id=user_id,
         team_id=team_id,
         provider=None,
         model=None,
@@ -137,13 +576,153 @@ async def _process_wecom_text_message(*, settings: Settings, app: dict[str, Any]
         enable_write=None,
         enable_browser=None,
         show_reasoning=None,
-        attachments=[],
+        attachments=attachments,
         team_skills_prompt=team_prompt or None,
     )
 
-    assistant = str((result or {}).get("assistant") or "").strip()
+    events = list((result or {}).get("events") or [])
+    assistant = _decorate_assistant_text(assistant=str((result or {}).get("assistant") or ""), events=events, settings=settings)
     if not assistant:
         return
+
+    # Persist session + messages (best-effort).
+    try:
+        now = utc_now_iso()
+        provider_name = (settings.provider or "openai").strip().lower()
+        model_name = (settings.model or "").strip()
+        title = f"[wecom] {'chat ' + chat_id if chat_id else from_user}".strip()
+
+        async with open_db(settings) as db:
+            await db.execute(
+                """
+                INSERT OR IGNORE INTO chat_sessions(
+                  session_id, team_id, user_id, role, provider, model, project_id, title, opencode_session_id, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+                """,
+                (
+                    session_id,
+                    team_id,
+                    user_id,
+                    "general",
+                    provider_name,
+                    model_name,
+                    title,
+                    result.get("opencode_session_id"),
+                    now,
+                    now,
+                ),
+            )
+            await db.execute(
+                """
+                UPDATE chat_sessions
+                SET updated_at = ?,
+                    role = ?,
+                    provider = ?,
+                    model = ?,
+                    opencode_session_id = COALESCE(opencode_session_id, ?),
+                    title = CASE WHEN title = '' THEN ? ELSE title END
+                WHERE session_id = ? AND team_id = ? AND user_id = ?
+                """,
+                (
+                    now,
+                    "general",
+                    provider_name,
+                    model_name,
+                    result.get("opencode_session_id"),
+                    title,
+                    session_id,
+                    team_id,
+                    user_id,
+                ),
+            )
+
+            await db.execute(
+                """
+                INSERT INTO chat_messages(session_id, team_id, user_id, role, content, attachments_json, events_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
+                """,
+                (
+                    session_id,
+                    team_id,
+                    user_id,
+                    "user",
+                    text,
+                    json.dumps(attachments or [], ensure_ascii=False),
+                    now,
+                ),
+            )
+            await db.execute(
+                """
+                INSERT INTO chat_messages(session_id, team_id, user_id, role, content, attachments_json, events_json, created_at)
+                VALUES (?, ?, ?, ?, ?, '[]', ?, ?)
+                """,
+                (
+                    session_id,
+                    team_id,
+                    user_id,
+                    "assistant",
+                    assistant,
+                    json.dumps(events, ensure_ascii=False),
+                    now,
+                ),
+            )
+
+            # Index user attachments + tool-generated files (best-effort).
+            files_to_index: list[dict] = []
+            for a in attachments or []:
+                if not isinstance(a, dict):
+                    continue
+                fid = str(a.get("file_id") or "").strip()
+                if not fid:
+                    continue
+                files_to_index.append(
+                    {
+                        "file_id": fid,
+                        "filename": str(a.get("filename") or fid),
+                        "content_type": str(a.get("content_type") or ""),
+                        "kind": str(a.get("kind") or ("image" if str(a.get("content_type") or "").startswith("image/") else "file")),
+                    }
+                )
+            files_to_index.extend(_extract_tool_files(events))
+
+            for f in files_to_index:
+                fid = str(f.get("file_id") or "").strip()
+                if not fid:
+                    continue
+                try:
+                    path = _safe_outputs_path(settings.outputs_dir, fid)
+                    size_bytes = int(path.stat().st_size) if path.exists() and path.is_file() else 0
+                except Exception:
+                    size_bytes = 0
+                filename = str(f.get("filename") or fid).strip() or fid
+                ctype = str(f.get("content_type") or "").strip().lower() or "application/octet-stream"
+                kind = str(f.get("kind") or "file").strip().lower()
+
+                await db.execute(
+                    """
+                    INSERT OR IGNORE INTO file_records(
+                      file_id, team_id, user_id, project_id, session_id, kind, filename, content_type, size_bytes, created_at
+                    ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (fid, team_id, user_id, session_id, kind, filename, ctype, size_bytes, now),
+                )
+                await db.execute(
+                    """
+                    UPDATE file_records
+                    SET session_id = COALESCE(session_id, ?)
+                    WHERE file_id = ? AND team_id = ? AND user_id = ?
+                    """,
+                    (session_id, fid, team_id, user_id),
+                )
+
+            await db.commit()
+
+            try:
+                await sync_session_snapshot_from_db(settings=settings, db=db, team_id=team_id, user_id=user_id, session_id=session_id)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     svc = WecomService()
     try:
@@ -225,8 +804,11 @@ async def wecom_callback(
         raise HTTPException(status_code=403, detail="forbidden") from None
 
     # Ack ASAP to prevent retries; process in background.
-    if msg.get("msg_type") == "text" and _safe_text(msg.get("content")):
-        asyncio.create_task(_process_wecom_text_message(settings=settings, app=app, message=msg))
+    msg_type = _safe_text(msg.get("msg_type")).lower()
+    is_text = msg_type == "text" and _safe_text(msg.get("content"))
+    is_media = msg_type in {"image", "file"} and _safe_text(msg.get("media_id"))
+    if is_text or is_media:
+        asyncio.create_task(_process_wecom_message(settings=settings, app=app, message=msg))
 
     return Response(content="success", media_type="text/plain")
 

@@ -1,5 +1,8 @@
 export { health, setAuthToken } from "./client"
 
+export { getMeta } from "./meta"
+export type { MetaResponse } from "./meta"
+
 export {
   authLogin,
   authRegister,

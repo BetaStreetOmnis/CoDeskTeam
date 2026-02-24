@@ -1,12 +1,17 @@
-# aistaff
+# CoDeskTeam
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-aistaff 是一个面向团队协作的 AI 工作台，核心是“对话驱动任务执行 + 团队化管理”：
+CoDeskTeam 是一个开源、可自托管的 **AI 工作台**，面向小团队与一人公司（OPC）。  
+你可以把它理解为 **“团队/企业版的 OpenClaw”**：以对话驱动任务执行，在团队治理与交付物自动化场景里开箱即用。
+
+> 鸣谢：本项目在网关/多渠道接入思路上参考了 OpenClaw，并提供可选的 OpenClaw ingress 集成入口。  
+> 当前代码库内部仍沿用 `aistaff` 命名（环境变量 `AISTAFF_*`、后端包 `aistaff_api`），不影响使用。
 
 - 前端：Vue 3 + Vite（统一工作台、聊天、历史、项目/团队/需求管理）
 - 后端：FastAPI（鉴权、多团队隔离、Agent 编排、文件与文档服务）
 - 内置能力：对话与历史、文件上传/下载、文档生成（PPT/报价单/报检单）、原型生成、企业微信/飞书回调
+- 可选能力：对接 OpenClaw 网关实现多渠道消息接入（作为 ingress）
 - 安全默认：`shell/write/browser` 等高危工具默认关闭，需显式开启
 
 本仓库包含完整前后端代码，适合自托管部署或二次开发扩展。
@@ -114,9 +119,21 @@ flowchart LR
 
 - `openai`：走内置 `run_agent_task + tools` 全能力链路
 - `codex`：走本机 `codex exec --json` 非交互链路（适合代码任务）
+- `pi`：走 `pi-mono` 的 Coding Agent CLI（文本模式；需要 `AISTAFF_ENABLE_PI=1` + 子模块），适合代码/任务分解；对文档/PPT/原型/附件等场景会自动回退到内置 OpenAI 工具链
 - `opencode` / `nanobot`：优先委托外部 Agent
 - 对文档/PPT/原型/附件等场景，`opencode` 与 `nanobot` 会自动回退到内置 OpenAI 工具链，以保证产物能力一致
 - provider 选择优先级：请求参数 `provider` > `.env` 中 `AISTAFF_PROVIDER` > 后端默认 `openai`
+
+### 2.3.1 OpenClaw / OpenCode（可选集成）
+
+- 本仓库包含三个可选上游子模块：
+  - `third_party/openclaw`：Moltbot/Clawdbot（网关 + 多渠道消息能力）
+  - `third_party/opencode`：OpenCode（Agent loop + approvals）
+  - `third_party/pi-mono`：Pi（Agent SDK + Coding Agent）
+- 拉取子模块：`git submodule update --init --recursive`
+- OpenClaw 网关入口（HTTP）：
+  1) 团队 `owner/admin` 生成 token：`POST /api/team/integrations/openclaw`
+  2) 网关发消息：`POST /api/integrations/openclaw/message`（Header: `x-aistaff-integration-token`）
 
 ### 2.4 安全策略
 
@@ -259,6 +276,8 @@ flowchart LR
 - `GET/POST/PUT/DELETE /api/team/skills`
 - `POST /api/team/skills/ai-draft`
 - `GET/POST/PUT/DELETE /api/team/requirements`
+- `POST /api/team/requirements/{requirement_id}/accept`
+- `POST /api/team/requirements/{requirement_id}/reject`
 - `GET/POST/PUT/DELETE /api/team/members`
 - `GET/POST/DELETE /api/team/invites`
 - `GET/POST/PUT/DELETE /api/team/wecom/apps`
@@ -270,6 +289,97 @@ OpenAI 兼容代理：
 - `POST /openai/v1/responses`
 - `POST /openai/v1/chat/completions`
 - `GET /openai/v1/models`
+
+### 6.1 需求交付（跨团队）
+
+需求页仍使用现有的 `team_requirements`（`incoming/todo/in_progress/done/blocked`），只是在**创建需求**时可选带上结构化的交付信息 `delivery`，用于把需求“交付”到其它团队处理：
+
+- 发起交付：源团队 `owner/admin` 在创建需求时传 `delivery.target_team_id`
+  - 系统会把这条需求**直接创建到目标团队**（`team_id=target_team_id`）
+  - 并强制设置：`status=incoming`、`source_team=源团队名称`、`delivery_state=pending`
+- 接收/拒绝：目标团队 `owner/admin` 处理
+  - 接收：`POST /api/team/requirements/{requirement_id}/accept`（`delivery_state=accepted`；若 `status=incoming` 会自动推进到 `todo`）
+  - 拒绝：`POST /api/team/requirements/{requirement_id}/reject`（`delivery_state=rejected`；默认列表会过滤掉被拒绝的交付）
+
+说明：交付需求当前是“单条记录”模式——只在目标团队侧存在一条需求记录（源团队列表不会自动生成镜像）。
+
+### 6.2 报价单生成示例（XLSX / DOCX）
+
+说明：
+
+- 报价单接口需要登录（`Authorization: Bearer <access_token>`）
+- 返回的 `download_url` 默认是**相对路径**（如 `/api/files/...`）；如果你配置了 `AISTAFF_PUBLIC_BASE_URL`，则会返回绝对 URL
+
+#### 1) 登录获取 token
+
+```bash
+API=http://127.0.0.1:8000
+
+TOKEN=$(
+  curl -sS -X POST "$API/api/auth/login" \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"admin@example.com","password":"your-password"}' \
+  | python -c 'import sys,json; print(json.load(sys.stdin)["access_token"])'
+)
+```
+
+#### 2) 生成 Excel 报价单（推荐）
+
+```bash
+META=$(
+  curl -sS -X POST "$API/api/docs/quote-xlsx" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{
+      "seller": "某某科技有限公司",
+      "buyer": "某某客户有限公司",
+      "currency": "CNY",
+      "items": [
+        { "name": "AI 工作台私有化部署", "quantity": 1,  "unit_price": 68000, "unit": "套",  "note": "含 1 年维护" },
+        { "name": "定制开发（需求/团队/权限）", "quantity": 20, "unit_price": 1500,  "unit": "人天", "note": "按周迭代交付" },
+        { "name": "培训与交付文档", "quantity": 2,  "unit_price": 2000,  "unit": "场",  "note": "线上/线下任选" }
+      ],
+      "note": "报价有效期 30 天；含税。"
+    }'
+)
+
+echo "$META" | python -m json.tool
+```
+
+返回示例（字段会包含 `file_id` / `download_url`）：
+
+```json
+{
+  "file_id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xlsx",
+  "filename": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xlsx",
+  "download_url": "/api/files/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xlsx?token=..."
+}
+```
+
+#### 3) 下载生成的文件
+
+```bash
+DOWNLOAD_URL=$(echo "$META" | python -c 'import sys,json; print(json.load(sys.stdin)["download_url"])')
+
+case "$DOWNLOAD_URL" in
+  http*) FULL_URL="$DOWNLOAD_URL" ;;
+  *)     FULL_URL="$API$DOWNLOAD_URL" ;;
+esac
+
+curl -L "$FULL_URL" -o quote.xlsx
+```
+
+#### 4) 生成 Word 报价单（可选）
+
+把接口改为 `/api/docs/quote` 即可（入参相同）：
+
+```bash
+curl -sS -X POST "$API/api/docs/quote" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"seller":"某某科技有限公司","buyer":"某某客户有限公司","currency":"CNY","items":[{"name":"服务A","quantity":1,"unit_price":1000,"unit":"项"}]}' \
+| python -m json.tool
+```
 
 ## 7. 运行方式
 
@@ -313,6 +423,91 @@ pnpm -C frontend build
 # 然后访问 http://127.0.0.1:8000/
 ```
 
+### 7.4 生产部署（Linux 单机示例）
+
+目标：把前端构建产物交给后端托管，用户直接访问 `http(s)://<your-domain>/`（无需单独起 5173）。
+
+#### 1) 准备环境
+
+- Node.js `>= 22` + `pnpm`
+- Python `>= 3.10` + `uv`
+
+可选（用于 PPT/PDF 预览图）：
+
+- LibreOffice（`soffice`）
+- Poppler（`pdftoppm`）
+- 中文字体（建议安装 `Noto Sans CJK` / 思源黑体，否则预览图可能会“丑/错位”）
+
+#### 2) 配置 `.env`
+
+至少需要：
+
+- `OPENAI_API_KEY=...`（使用对话/Agent 时必需）
+- `AISTAFF_PUBLIC_BASE_URL=http://124.132.152.75:8000`（建议设置为你的对外域名/地址，用于生成绝对下载链接）
+- 数据库（生产建议 Postgres）：`AISTAFF_DB_URL=postgresql://user:pass@host:5432/db`
+- （可选）`AISTAFF_PPT_FONT=Noto Sans CJK SC`（Linux 服务器渲染/预览更稳定）
+
+#### 3) 后端依赖 + 迁移
+
+```bash
+cd backend
+uv sync
+# 使用 Postgres 时执行迁移
+uv run alembic upgrade head
+```
+
+#### 4) 构建前端
+
+```bash
+pnpm -C frontend i
+pnpm -C frontend build
+```
+
+构建完成后，后端会自动挂载 `frontend/dist` 到 `/`。
+
+#### 5) 启动后端（直接运行）
+
+```bash
+cd backend
+uv run uvicorn aistaff_api.main:app --host 0.0.0.0 --port 8000
+```
+
+访问：
+
+- Web（后端托管前端）：`http://<server>:8000/`
+- API：`http://<server>:8000/api/*`
+
+#### 6) systemd（可选，推荐）
+
+示例（按需修改路径与用户）：
+
+```ini
+# /etc/systemd/system/codeskteam.service
+[Unit]
+Description=CoDeskTeam (FastAPI)
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/codeskteam/backend
+EnvironmentFile=/opt/codeskteam/.env
+ExecStart=/opt/codeskteam/backend/.venv/bin/uvicorn aistaff_api.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用并启动：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now codeskteam
+sudo systemctl status codeskteam
+```
+
 ## 8. 配置速查（`.env`）
 
 模型与 provider：
@@ -326,6 +521,23 @@ pnpm -C frontend build
 
 - `AISTAFF_WORKSPACE=/path/to/workspace`
 - `AISTAFF_PROJECTS_ROOT=/path/a,/path/b`
+
+### 8.1 中央代码参考仓库（Reference Repo）
+
+典型用法：公司/组织维护一份“中央代码参考仓库”（规范、脚手架、SDK、示例工程、最佳实践等），各团队在 CoDeskTeam 里把它当作一个可选的“项目/工作区”来对话检索与引用。
+
+它的实现逻辑是：
+
+- 服务端用 `AISTAFF_PROJECTS_ROOT` 定义“允许被团队添加”的目录白名单（默认等于 `AISTAFF_WORKSPACE`）
+- 团队 `owner/admin` 在「项目/工作区管理」里把中央仓库路径加入 `team_projects`（可用“一键导入项目”扫描后快速导入）
+- 聊天时如果带 `project_id`，后端会把该项目的 `path` 作为本次对话的 `workspace_root`（Agent 的 `fs_list/fs_read/...` 等工具都在此目录内生效）
+- 不带 `project_id` 时，则使用团队级的 `workspace_path`（`/api/team/settings`）或回退到服务端 `AISTAFF_WORKSPACE`
+
+建议：
+
+- 让中央仓库路径对所有需要的团队都可见：把同一目录分别导入到各自团队的 `team_projects` 即可（按团队隔离的是“配置”，不是“文件夹拷贝”）
+- 中央仓库不要放敏感信息（即使工具默认会拦截 `.env`，也可能存在其它敏感文件）
+- 生产环境建议保持 `AISTAFF_ENABLE_WRITE=0`，把“参考仓库”当只读使用（需要写入时再对特定团队/场景开启）
 
 飞书预配置（可选）：
 
@@ -363,6 +575,13 @@ pnpm -C frontend build
 - `AISTAFF_CODEX_REASONING_EFFORT=medium`
 - `AISTAFF_OPENCODE_BASE_URL=http://127.0.0.1:4096`
 - `AISTAFF_NANOBOT_CMD=nanobot`
+
+共享邀请码（内部使用，可多次注册）：
+
+- `AISTAFF_SHARED_INVITE_TOKEN=...`
+- `AISTAFF_SHARED_INVITE_TEAM_ID=...`（可选，限制只能加入指定团队）
+- `AISTAFF_SHARED_INVITE_TEAM_NAME=...`（可选）
+- `AISTAFF_SHARED_INVITE_ROLE=member`（默认 member；admin 需同时设置 `AISTAFF_SHARED_INVITE_ALLOW_ADMIN=1`）
 
 ## 9. 登录与多团队
 

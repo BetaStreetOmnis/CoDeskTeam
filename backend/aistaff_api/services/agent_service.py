@@ -29,6 +29,7 @@ from ..session_store import get_session_store
 from .opencode_service import OpencodeService
 from .nanobot_service import NanobotService
 from .codex_service import CodexService
+from .pi_service import PiService
 
 
 _TEAM_SKILLS_MARKER = "【团队技能】"
@@ -983,6 +984,188 @@ class AgentService:
                     *result.events,
                 ],
                 "opencode_session_id": session.opencode_session_id,
+            }
+
+        if provider_name == "pi":
+            if not bool(getattr(self._settings, "enable_pi", False)):
+                raise ValueError("Pi provider is disabled. Set AISTAFF_ENABLE_PI=1 to enable it.")
+
+            session = await store.get_or_create(
+                session_id=sid,
+                user_id=user_id,
+                team_id=team_id,
+                role=role,
+                system_prompt=f"pi:{role}",
+                workspace_root=str(workspace),
+                ttl_seconds=max(0, int(self._settings.session_ttl_minutes)) * 60,
+                max_sessions=max(0, int(self._settings.max_sessions)),
+            )
+
+            extra_system = ""
+            if team_skills_prompt and team_skills_prompt.strip():
+                extra_system = team_skills_prompt.strip()
+            if summary_text:
+                extra_system = f"{extra_system}\n\n{summary_text}" if extra_system else summary_text
+
+            is_ppt, ppt_pages = _ppt_request(message)
+            is_quote = _quote_request(message)
+            inspect_fmt = _inspection_request(message)
+            is_inspection = inspect_fmt is not None
+            is_proto = _proto_request(message)
+            has_attachments = bool(attachments)
+
+            # Pi doesn't know aistaff's artifact tools; fall back to aistaff agent loop for doc/proto/attachments.
+            if is_ppt or is_quote or is_inspection or is_proto or has_attachments:
+                requested = []
+                if is_ppt:
+                    requested.append("ppt")
+                if is_quote:
+                    requested.append("quote")
+                if is_inspection:
+                    requested.append("inspection")
+                if is_proto:
+                    requested.append("proto")
+                if has_attachments:
+                    requested.append("attachments")
+
+                extra_preset = self._normalize_security_preset(security_preset)
+                requested_shell2, requested_write2, requested_browser2 = self._resolve_security_toggles(
+                    preset=extra_preset,
+                    enable_shell=None,
+                    enable_write=None,
+                    enable_browser=None,
+                )
+                tool_ctx = ToolContext(
+                    session_id=sid,
+                    workspace_root=workspace,
+                    outputs_dir=self._settings.outputs_dir,
+                    enable_shell=False,
+                    enable_write=False,
+                    enable_browser=False,
+                    max_file_read_chars=self._settings.max_file_read_chars,
+                    max_tool_output_chars=self._settings.max_tool_output_chars,
+                    max_context_chars=max(0, int(self._settings.max_context_chars)),
+                )
+
+                tools = self._build_tools(tool_ctx)
+                used_model = (model or self._settings.model or "gpt-5.2").strip() or "gpt-5.2"
+                provider_impl = OpenAiProvider(
+                    api_key=self._settings.openai_api_key,
+                    base_url=self._settings.openai_base_url,
+                    outputs_dir=self._settings.outputs_dir,
+                )
+
+                messages: list[ChatMessage] = list(session.messages)
+                extra_system_text = extra_system.strip() if extra_system else ""
+                if is_ppt:
+                    extra_system_text = f"{extra_system_text}\n\n{_ppt_system_instruction(ppt_pages)}".strip()
+                if is_quote:
+                    extra_system_text = f"{extra_system_text}\n\n{_quote_system_instruction()}".strip()
+                if is_inspection:
+                    extra_system_text = f"{extra_system_text}\n\n{_inspection_system_instruction(inspect_fmt or 'docx')}".strip()
+                if is_proto:
+                    extra_system_text = f"{extra_system_text}\n\n{_proto_system_instruction()}".strip()
+
+                if extra_system_text:
+                    messages.append(ChatMessage(role="system", content=extra_system_text))
+
+                events: list[dict[str, Any]] = [
+                    {
+                        "type": "security_profile",
+                        "preset": security_profile,
+                        "requested": {
+                            "shell": requested_shell2,
+                            "write": requested_write2,
+                            "browser": requested_browser2,
+                            "dangerous": bool(enable_dangerous),
+                        },
+                        "effective": {
+                            "shell": False,
+                            "write": False,
+                            "browser": False,
+                            "dangerous": False,
+                        },
+                    },
+                    {"type": "pi_fallback", "provider": "openai", "requested": requested},
+                ]
+
+                async def on_event(ev):  # noqa: ANN001
+                    events.append({"type": ev.type, **ev.data})
+
+                assistant, _messages_out = await run_agent_task(
+                    provider=provider_impl,
+                    model=used_model,
+                    messages=messages,
+                    user_input=message,
+                    user_attachments=attachments,
+                    tools=tools,
+                    tool_ctx=tool_ctx,
+                    max_steps=max(1, int(self._settings.max_steps)),
+                    on_event=on_event,
+                )
+
+                await store.update_messages(
+                    session_id=sid,
+                    user_id=user_id,
+                    team_id=team_id,
+                    messages=[
+                        *session.messages,
+                        ChatMessage(role="user", content=message, attachments=attachments or None),
+                        ChatMessage(role="assistant", content=assistant),
+                    ],
+                    max_messages=max(0, int(self._settings.max_session_messages)),
+                    max_chars=max(0, int(self._settings.max_context_chars)),
+                )
+
+                return {"session_id": sid, "assistant": assistant, "events": events, "opencode_session_id": None}
+
+            svc = PiService(self._settings)
+            used_model = model
+            result = await svc.chat(
+                session=session,
+                message=message,
+                role=role,
+                model=used_model,
+                workspace_root=workspace,
+                enable_shell=effective_shell,
+                enable_write=effective_write,
+                system_prompt=extra_system or None,
+            )
+
+            await store.update_messages(
+                session_id=sid,
+                user_id=user_id,
+                team_id=team_id,
+                messages=[
+                    *session.messages,
+                    ChatMessage(role="user", content=message, attachments=attachments or None),
+                    ChatMessage(role="assistant", content=result.assistant),
+                ],
+                max_messages=max(0, int(self._settings.max_session_messages)),
+                max_chars=max(0, int(self._settings.max_context_chars)),
+            )
+
+            return {
+                "session_id": sid,
+                "assistant": result.assistant,
+                "events": [
+                    {
+                        "type": "security_profile",
+                        "preset": security_profile,
+                        "requested": {
+                            "shell": requested_shell,
+                            "write": requested_write,
+                            "browser": requested_browser,
+                        },
+                        "effective": {
+                            "shell": effective_shell,
+                            "write": effective_write,
+                            "browser": effective_browser,
+                        },
+                    },
+                    *result.events,
+                ],
+                "opencode_session_id": None,
             }
 
         if provider_name == "nanobot":

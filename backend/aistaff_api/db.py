@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import datetime
-from pathlib import Path
 from typing import Any, AsyncIterator, Iterable
 import re
 
@@ -17,7 +16,7 @@ from .config import Settings
 from .time_utils import UTC
 
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 12
 _ID_RETURNING_TABLES = {
     "users",
     "teams",
@@ -25,6 +24,8 @@ _ID_RETURNING_TABLES = {
     "team_projects",
     "team_requirements",
     "team_skills",
+    "integration_tokens",
+    "external_identities",
     "team_chatbi_datasources",
     "wecom_apps",
     "feishu_webhooks",
@@ -439,6 +440,49 @@ async def init_db(settings: Settings) -> None:
                 )
                 """,
                 """
+                CREATE TABLE IF NOT EXISTS integration_tokens (
+                  id BIGSERIAL PRIMARY KEY,
+                  team_id BIGINT NOT NULL,
+                  kind TEXT NOT NULL,
+                  name TEXT NOT NULL DEFAULT '',
+                  token TEXT NOT NULL UNIQUE,
+                  created_by BIGINT NULL,
+                  created_at TEXT NOT NULL,
+                  revoked_at TEXT NULL,
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+                  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS external_identities (
+                  id BIGSERIAL PRIMARY KEY,
+                  team_id BIGINT NOT NULL,
+                  provider TEXT NOT NULL,
+                  external_id TEXT NOT NULL,
+                  user_id BIGINT NOT NULL,
+                  display_name TEXT NOT NULL DEFAULT '',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE(team_id, provider, external_id),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS external_events (
+                  id BIGSERIAL PRIMARY KEY,
+                  team_id BIGINT NOT NULL,
+                  provider TEXT NOT NULL,
+                  external_id TEXT NOT NULL,
+                  session_id TEXT NULL,
+                  user_id BIGINT NULL,
+                  created_at TEXT NOT NULL,
+                  UNIQUE(team_id, provider, external_id),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+                )
+                """,
+                """
                 CREATE TABLE IF NOT EXISTS team_projects (
                   id BIGSERIAL PRIMARY KEY,
                   team_id BIGINT NOT NULL,
@@ -587,6 +631,10 @@ async def init_db(settings: Settings) -> None:
                 "CREATE INDEX IF NOT EXISTS idx_memberships_team_id ON memberships(team_id)",
                 "CREATE INDEX IF NOT EXISTS idx_invites_team_id ON invites(team_id)",
                 "CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token)",
+                "CREATE INDEX IF NOT EXISTS idx_integration_tokens_team_id ON integration_tokens(team_id)",
+                "CREATE INDEX IF NOT EXISTS idx_external_identities_team_id ON external_identities(team_id)",
+                "CREATE INDEX IF NOT EXISTS idx_external_identities_user_id ON external_identities(user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_external_events_team_id ON external_events(team_id)",
                 "CREATE INDEX IF NOT EXISTS idx_team_projects_team_id ON team_projects(team_id)",
                 "CREATE INDEX IF NOT EXISTS idx_team_requirements_team_id ON team_requirements(team_id)",
                 "CREATE INDEX IF NOT EXISTS idx_team_requirements_project_id ON team_requirements(project_id)",
@@ -659,6 +707,46 @@ async def init_db(settings: Settings) -> None:
                   FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
                   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
                   FOREIGN KEY (used_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS integration_tokens (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  kind TEXT NOT NULL,
+                  name TEXT NOT NULL DEFAULT '',
+                  token TEXT NOT NULL UNIQUE,
+                  created_by INTEGER NULL,
+                  created_at TEXT NOT NULL,
+                  revoked_at TEXT NULL,
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+                  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS external_identities (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  provider TEXT NOT NULL,
+                  external_id TEXT NOT NULL,
+                  user_id INTEGER NOT NULL,
+                  display_name TEXT NOT NULL DEFAULT '',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE(team_id, provider, external_id),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS external_events (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  provider TEXT NOT NULL,
+                  external_id TEXT NOT NULL,
+                  session_id TEXT NULL,
+                  user_id INTEGER NULL,
+                  created_at TEXT NOT NULL,
+                  UNIQUE(team_id, provider, external_id),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS team_projects (
@@ -801,6 +889,10 @@ async def init_db(settings: Settings) -> None:
                 CREATE INDEX IF NOT EXISTS idx_memberships_team_id ON memberships(team_id);
                 CREATE INDEX IF NOT EXISTS idx_invites_team_id ON invites(team_id);
                 CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token);
+                CREATE INDEX IF NOT EXISTS idx_integration_tokens_team_id ON integration_tokens(team_id);
+                CREATE INDEX IF NOT EXISTS idx_external_identities_team_id ON external_identities(team_id);
+                CREATE INDEX IF NOT EXISTS idx_external_identities_user_id ON external_identities(user_id);
+                CREATE INDEX IF NOT EXISTS idx_external_events_team_id ON external_events(team_id);
                 CREATE INDEX IF NOT EXISTS idx_team_projects_team_id ON team_projects(team_id);
                 CREATE INDEX IF NOT EXISTS idx_team_requirements_team_id ON team_requirements(team_id);
                 CREATE INDEX IF NOT EXISTS idx_team_requirements_project_id ON team_requirements(project_id);

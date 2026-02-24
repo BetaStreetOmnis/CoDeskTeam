@@ -36,6 +36,16 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _read_text_if_exists(path: Path) -> str | None:
+    try:
+        if not path.exists():
+            return None
+        value = path.read_text(encoding="utf-8").strip()
+        return value or None
+    except Exception:
+        return None
+
+
 @dataclass(frozen=True)
 class Settings:
     app_root: Path
@@ -51,9 +61,11 @@ class Settings:
     super_emails: frozenset[str]
     db_url: str | None
     outputs_dir: Path
+    data_dir: Path
     db_path: Path
     jwt_secret: str
     jwt_exp_minutes: int
+    shared_invite_token: str | None
     enable_shell: bool
     enable_write: bool
     enable_browser: bool
@@ -83,6 +95,13 @@ class Settings:
     feishu_preset_webhook_url: str | None
     feishu_preset_verification_token: str | None
     feishu_preset_enabled: bool
+    enable_pi: bool
+    pi_backend: str
+    pi_docker_image: str
+    pi_timeout_seconds: int
+    pi_mono_dir: Path
+    pi_agent_dir: Path
+    pi_enable_tools: bool
 
 
 def load_settings() -> Settings:
@@ -111,13 +130,24 @@ def load_settings() -> Settings:
     jwt_secret = _env_str("AISTAFF_JWT_SECRET", None)
     if not jwt_secret:
         secret_path = data_dir / "jwt_secret"
-        if secret_path.exists():
-            jwt_secret = secret_path.read_text(encoding="utf-8").strip() or None
+        jwt_secret = _read_text_if_exists(secret_path)
         if not jwt_secret:
             jwt_secret = secrets.token_urlsafe(48)
             secret_path.write_text(jwt_secret, encoding="utf-8")
 
     jwt_exp_minutes = _env_int("AISTAFF_JWT_EXP_MINUTES", 7 * 24 * 60)
+
+    shared_invite_token = (_env_str("AISTAFF_SHARED_INVITE_TOKEN", "") or "").strip() or None
+    if not shared_invite_token:
+        auto_shared = _env_bool("AISTAFF_SHARED_INVITE_AUTO", True)
+        if auto_shared:
+            token_path = data_dir / "shared_invite_token"
+            shared_invite_token = _read_text_if_exists(token_path)
+            if not shared_invite_token:
+                shared_invite_token = secrets.token_urlsafe(24)
+                token_path.write_text(shared_invite_token, encoding="utf-8")
+                print(f"[aistaff] 已生成通用邀请码（内部使用）并写入：{token_path}")
+                print(f"[aistaff] 通用邀请码：{shared_invite_token}")
 
     cors_origins = [
         origin.strip()
@@ -133,6 +163,12 @@ def load_settings() -> Settings:
         email.strip().lower() for email in super_emails_raw.split(",") if email.strip()
     )
 
+    pi_mono_dir = Path(_env_str("AISTAFF_PI_MONO_DIR", str(repo_root / "third_party" / "pi-mono"))).expanduser().resolve()
+    pi_agent_dir = Path(_env_str("AISTAFF_PI_AGENT_DIR", str(data_dir / "pi" / "agent"))).expanduser().resolve()
+    pi_backend = (_env_str("AISTAFF_PI_BACKEND", "auto") or "auto").strip().lower()
+    if pi_backend not in {"auto", "local", "docker"}:
+        pi_backend = "auto"
+
     return Settings(
         app_root=repo_root,
         provider=_env_str("AISTAFF_PROVIDER", "openai") or "openai",
@@ -147,9 +183,11 @@ def load_settings() -> Settings:
         super_emails=super_emails,
         db_url=db_url,
         outputs_dir=outputs_dir,
+        data_dir=data_dir,
         db_path=db_path,
         jwt_secret=jwt_secret,
         jwt_exp_minutes=jwt_exp_minutes,
+        shared_invite_token=shared_invite_token,
         enable_shell=_env_bool("AISTAFF_ENABLE_SHELL", False),
         enable_write=_env_bool("AISTAFF_ENABLE_WRITE", False),
         enable_browser=_env_bool("AISTAFF_ENABLE_BROWSER", False),
@@ -183,4 +221,11 @@ def load_settings() -> Settings:
         feishu_preset_webhook_url=_env_str("AISTAFF_FEISHU_PRESET_WEBHOOK_URL", None),
         feishu_preset_verification_token=_env_str("AISTAFF_FEISHU_PRESET_VERIFICATION_TOKEN", None),
         feishu_preset_enabled=_env_bool("AISTAFF_FEISHU_PRESET_ENABLED", True),
+        enable_pi=_env_bool("AISTAFF_ENABLE_PI", False),
+        pi_backend=pi_backend,
+        pi_docker_image=_env_str("AISTAFF_PI_DOCKER_IMAGE", "node:20") or "node:20",
+        pi_timeout_seconds=_env_int("AISTAFF_PI_TIMEOUT_SECONDS", 300),
+        pi_mono_dir=pi_mono_dir,
+        pi_agent_dir=pi_agent_dir,
+        pi_enable_tools=_env_bool("AISTAFF_PI_ENABLE_TOOLS", False),
     )

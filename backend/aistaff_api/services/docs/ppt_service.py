@@ -9,16 +9,12 @@ import subprocess
 import tempfile
 from uuid import uuid4
 
-from docx import Document
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE
 from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Inches, Pt
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
 
 from ...config import Settings
 from ...output_cleanup import maybe_cleanup_outputs_dir
@@ -273,7 +269,9 @@ class PptDocService:
         elif style == "template_team":
             values.append(team)
         elif style == "auto":
-            values.extend([jetlinks, team])
+            # Prefer the simpler team template by default. If it can't satisfy the requested slide count,
+            # we fall back to the richer JetLinks template.
+            values.extend([team, jetlinks])
 
         seen: set[str] = set()
         out: list[Path] = []
@@ -313,12 +311,10 @@ class PptDocService:
         def _effective_keep_images() -> bool:
             if template_keep_images is not None:
                 return bool(template_keep_images)
-            return str(os.getenv("AISTAFF_PPT_KEEP_TEMPLATE_IMAGES") or "").strip().lower() in {
-                "1",
-                "true",
-                "yes",
-                "on",
-            }
+            raw = str(os.getenv("AISTAFF_PPT_KEEP_TEMPLATE_IMAGES") or "").strip().lower()
+            if raw:
+                return raw in {"1", "true", "yes", "on"}
+            return True
 
         def _effective_template_mode() -> str:
             raw = str(template_mode or os.getenv("AISTAFF_PPT_TEMPLATE_MODE") or "").strip().lower()
@@ -378,7 +374,8 @@ class PptDocService:
             if not text_value:
                 return ""
             text_value = bullet_prefix_re.sub("", text_value).strip()
-            return _normalize_text(text_value, max_chars=96)
+            # Keep bullets compact so the template/programmatic layouts don't look crowded.
+            return _normalize_text(text_value, max_chars=56)
 
         def _cover_title_lines(value: str) -> list[str]:
             text_value = _normalize_text(value, max_chars=52, fallback="演示文稿")
@@ -871,6 +868,51 @@ class PptDocService:
                         continue
                 return best
 
+            def _best_run_by_font(paragraph) -> object | None:  # noqa: ANN001
+                runs = list(getattr(paragraph, "runs", []) or [])
+                if not runs:
+                    return None
+                best_run = runs[0]
+                best_score = -1.0
+                for run in runs:
+                    score = -1.0
+                    try:
+                        if run.font.size is not None:
+                            score = float(run.font.size.pt)
+                    except Exception:
+                        score = -1.0
+                    if score > best_score:
+                        best_score = score
+                        best_run = run
+                return best_run
+
+            def _copy_run_font(src_run, dest_run) -> None:  # noqa: ANN001
+                try:
+                    name = getattr(getattr(src_run, "font", None), "name", None)
+                    if name:
+                        dest_run.font.name = name
+                except Exception:
+                    pass
+                try:
+                    size = getattr(getattr(src_run, "font", None), "size", None)
+                    if size is not None:
+                        dest_run.font.size = size
+                except Exception:
+                    pass
+                for attr in ("bold", "italic", "underline"):
+                    try:
+                        value = getattr(getattr(src_run, "font", None), attr, None)
+                        if value is not None:
+                            setattr(dest_run.font, attr, value)
+                    except Exception:
+                        continue
+                try:
+                    src_color = getattr(getattr(getattr(src_run, "font", None), "color", None), "rgb", None)
+                    if src_color is not None:
+                        dest_run.font.color.rgb = src_color
+                except Exception:
+                    pass
+
             def _set_paragraph_text_preserve(paragraph, value: str) -> None:  # noqa: ANN001
                 runs = list(getattr(paragraph, "runs", []) or [])
                 if not runs:
@@ -926,8 +968,16 @@ class PptDocService:
                         if score > best_score:
                             best_score = score
                             best_idx = idx
+                    style_run = _best_run_by_font(paragraphs[best_idx])
+                    dest = paragraphs[0]
+                    _set_paragraph_text_preserve(dest, lines[0])
+                    dest_run = _best_run_by_font(dest)
+                    if style_run is not None and dest_run is not None:
+                        _copy_run_font(style_run, dest_run)
                     for idx, p in enumerate(paragraphs):
-                        _set_paragraph_text_preserve(p, lines[0] if idx == best_idx else "")
+                        if idx == 0:
+                            continue
+                        _set_paragraph_text_preserve(p, "")
                     return
 
                 while len(paragraphs) < len(lines):
@@ -1217,7 +1267,7 @@ class PptDocService:
                 # to avoid reusing complex business pages (lots of pictures/groups/textboxes).
                 if len(selected) < needed:
                     slide_area = max(1, int(slide_width) * int(slide_height))
-                    candidates: list[tuple[tuple[int, int, int, int, int, int, int, int], int]] = []
+                    candidates: list[tuple[tuple[int, ...], int]] = []
                     for idx, slide in enumerate(list(prs_t.slides), start=1):
                         if idx == 1:
                             continue
@@ -1233,6 +1283,22 @@ class PptDocService:
                         pic_count = sum(1 for s in shapes if getattr(s, "shape_type", None) == MSO_SHAPE_TYPE.PICTURE)
                         if text_count == 0:
                             continue
+                        pic_area = 0
+                        max_pic_ratio = 0.0
+                        for s in shapes:
+                            if getattr(s, "shape_type", None) != MSO_SHAPE_TYPE.PICTURE:
+                                continue
+                            if _is_background_shape(s, slide_width, slide_height):
+                                continue
+                            area = _shape_area(s)
+                            if area <= 0:
+                                continue
+                            pic_area += area
+                            ratio = float(area) / float(slide_area)
+                            if ratio > max_pic_ratio:
+                                max_pic_ratio = ratio
+                        pic_area_scaled = int(round((float(pic_area) / float(slide_area)) * 1000.0)) if slide_area else 0
+                        max_pic_scaled = int(round(max_pic_ratio * 1000.0))
                         body_ph = sum(
                             1
                             for s in shapes
@@ -1299,9 +1365,27 @@ class PptDocService:
                             bucket = 4
                         else:
                             bucket = 5
+                        # Extra penalty: slides with a large non-background picture are often image-centric
+                        # layouts (little space for bullets), even if they look "simple" by shape count.
+                        if max_pic_scaled >= 260:
+                            bucket += 2
+                        elif max_pic_scaled >= 180:
+                            bucket += 1
 
                         # Penalize slides that contain lots of pre-filled text (likely business pages).
-                        score = (bucket, -content_scaled, nonempty_text, shape_count, pic_count, group_count, text_count, idx)
+                        # Also avoid layouts that reserve big areas for non-background pictures (image-centric pages).
+                        score = (
+                            bucket,
+                            max_pic_scaled,
+                            pic_area_scaled,
+                            -content_scaled,
+                            nonempty_text,
+                            shape_count,
+                            pic_count,
+                            group_count,
+                            text_count,
+                            idx,
+                        )
                         candidates.append((score, idx))
                     candidates.sort(key=lambda item: item[0])
                     for _, idx in candidates:
@@ -1422,7 +1506,7 @@ class PptDocService:
         prs.slide_width = Inches(13.333)
         prs.slide_height = Inches(7.5)
 
-        font_name = "微软雅黑"
+        font_name = str(os.getenv("AISTAFF_PPT_FONT") or "").strip() or "微软雅黑"
         palette = style_profiles.get(effective_style, style_profiles["modern_blue"])
         navy = _rgb(palette["cover_from"])
         deep_blue = _rgb(palette["cover_to"])
@@ -1438,6 +1522,14 @@ class PptDocService:
         white = _rgb("FFFFFF")
         chip_bg = _rgb(palette["chip_bg"])
         success = _rgb(palette["success"])
+
+        def _blend(a: RGBColor, b: RGBColor, alpha: float) -> RGBColor:
+            ratio = max(0.0, min(1.0, float(alpha)))
+            return RGBColor(
+                int(round((a[0] * ratio) + (b[0] * (1 - ratio)))),
+                int(round((a[1] * ratio) + (b[1] * (1 - ratio)))),
+                int(round((a[2] * ratio) + (b[2] * (1 - ratio)))),
+            )
 
         blank = prs.slide_layouts[6]
         total_pages = len(normalized_slides) + 1
@@ -1624,14 +1716,14 @@ class PptDocService:
             for idx, item in enumerate(items):
                 paragraph = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
                 paragraph.alignment = PP_ALIGN.LEFT
-                paragraph.line_spacing = 1.2
-                paragraph.space_after = Pt(8)
+                paragraph.line_spacing = 1.18
+                paragraph.space_after = Pt(6)
 
                 mark = paragraph.add_run()
-                mark.text = "● "
+                mark.text = "• "
                 mark.font.name = font_name
-                mark.font.size = font_size
-                mark.font.bold = True
+                mark.font.size = Pt(max(10, int(font_size.pt) - 1))
+                mark.font.bold = False
                 mark.font.color.rgb = bullet_color
 
                 run = paragraph.add_run()
@@ -1683,6 +1775,7 @@ class PptDocService:
             card.line.color.rgb = border
 
             if chosen_layout == "focus":
+                key_fill = _blend(chip_bg, surface, 0.75) if effective_style == "dark_tech" else _blend(chip_bg, surface, 0.35)
                 key_box = content_slide.shapes.add_shape(
                     MSO_SHAPE.ROUNDED_RECTANGLE,
                     Inches(card_left + 0.34),
@@ -1691,7 +1784,7 @@ class PptDocService:
                     Inches(4.72),
                 )
                 key_box.fill.solid()
-                key_box.fill.fore_color.rgb = _rgb("EEF2FF")
+                key_box.fill.fore_color.rgb = key_fill
                 key_box.line.fill.background()
 
                 key_title = content_slide.shapes.add_textbox(Inches(card_left + 0.58), Inches(card_top + 0.56), Inches(6.0), Inches(0.4))
@@ -1749,6 +1842,7 @@ class PptDocService:
                     c = idx % columns
                     x = inner_left + c * (box_width + gutter_x)
                     y = inner_top + r * (box_height + gutter_y)
+                    tip_fill = _blend(chip_bg, surface, 0.82) if effective_style == "dark_tech" else _blend(chip_bg, surface, 0.22)
 
                     tip = content_slide.shapes.add_shape(
                         MSO_SHAPE.ROUNDED_RECTANGLE,
@@ -1758,7 +1852,7 @@ class PptDocService:
                         Inches(box_height),
                     )
                     tip.fill.solid()
-                    tip.fill.fore_color.rgb = _rgb("F3F4F6") if effective_style != "dark_tech" else _rgb("1E293B")
+                    tip.fill.fore_color.rgb = tip_fill
                     tip.line.color.rgb = border
 
                     icon = content_slide.shapes.add_shape(

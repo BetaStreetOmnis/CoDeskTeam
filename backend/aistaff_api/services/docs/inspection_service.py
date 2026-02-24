@@ -1,26 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-import os
-from pathlib import Path
-import re
-import shutil
-import subprocess
-import tempfile
 from uuid import uuid4
 
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor as DocxRGBColor
-from pptx import Presentation
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE
-from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
-from pptx.util import Inches, Pt
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
 
 from ...config import Settings
 from ...output_cleanup import maybe_cleanup_outputs_dir
