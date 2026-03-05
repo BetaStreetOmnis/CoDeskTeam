@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..db import fetchall, fetchone, row_to_dict, rows_to_dicts, utc_now_iso
-from ..deps import CurrentUser, get_current_user, get_db, get_settings
+from ..deps import CurrentUser, get_current_user, get_db, get_settings, is_super_user
 from ..services.team_skill_seed_service import ensure_default_team_skills
 
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 def _require_super(user: CurrentUser, settings) -> None:  # noqa: ANN001
-    if str(user.email or "").strip().lower() not in settings.super_emails:
+    if not is_super_user(settings, str(user.email or "")):
         raise HTTPException(status_code=403, detail="需要超级管理员权限")
 
 
@@ -136,4 +136,3 @@ async def update_admin_team(
     if not data:
         raise HTTPException(status_code=404, detail="团队不存在")
     return AdminTeam(**data)
-

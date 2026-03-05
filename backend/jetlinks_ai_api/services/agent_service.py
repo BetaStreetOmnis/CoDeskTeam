@@ -29,6 +29,16 @@ from ..session_store import get_session_store
 from .opencode_service import OpencodeService
 from .nanobot_service import NanobotService
 from .codex_service import CodexService
+try:
+    from .claude_service import ClaudeService
+except Exception:  # pragma: no cover - optional runtime dependency in mixed deployments
+    ClaudeService = None  # type: ignore[assignment]
+
+try:
+    from .openclaw_service import OpenClawService, OpenClawChatResult
+except Exception:  # pragma: no cover - optional runtime dependency in mixed deployments
+    OpenClawService = None  # type: ignore[assignment]
+    OpenClawChatResult = None  # type: ignore[assignment]
 from .pi_service import PiService
 
 
@@ -105,12 +115,13 @@ def _ppt_system_instruction(pages: int | None) -> str:
         "用户在请求生成一份 PPT（PPTX）。你必须调用工具 `doc_pptx_create` 生成文件，并在最终回复中给出下载链接。\n"
         "- `doc_pptx_create` 支持可选参数：`style`（auto/modern_blue/minimal_gray/dark_tech/warm_business/template_jetlinks/template_team）和 `layout_mode`（auto/focus/single_column/two_column/cards）。\n"
         "- 如用户提供/上传了 PPTX 模板（file_id 以 .pptx 结尾），可用 `template_file_id` 指定模板；必要时可补充 `template_content_indices`（内容页索引，1-based）与 `template_keep_images`。\n"
+        "- 优先复用模板渲染：默认传 `template_mode='inplace'`，并尽量保留模板视觉元素（`template_keep_images=true`）。\n"
         "- 若用户提出风格诉求（如深色、极简、科技蓝、企业蓝、暖色商务、卡片化），请显式传对应 `style` / `layout_mode`。\n"
         "- 除非用户明确要求定制，否则不要在生成前反复提问；信息不全也先生成“全员通用版”。默认：受众=公司员工，时长=60分钟，方向=通识入门+办公提效+安全合规。\n"
         "- 如需确认，仅允许在生成后追加 1 个可选问题用于二次优化。\n"
         f"- 目标总页数：{total} 页（包含 1 页封面）。工具会自动生成封面，因此你需要在 `slides` 中提供 {content_slides} 页内容。\n"
         "- 每页标题要具体（避免‘概述/总结’空标题），优先‘问题/方法/动作/收益’表述。\n"
-        "- 每页 3–6 条要点；每条控制在 10–28 个中文字符，尽量用动词开头（例如：明确/建立/推进/复盘）。\n"
+        "- 每页 3–5 条要点；每条控制在 8–20 个中文字符，尽量用动词开头（例如：明确/建立/推进/复盘）。\n"
         "- 页间结构建议：背景与目标 → 方法与步骤 → 场景案例 → 落地计划与里程碑。\n"
         "- 避免堆砌定义；每页至少有 1 条可执行动作或可量化结果。\n"
         "- 输出语言：中文。\n"
@@ -347,6 +358,18 @@ class AgentService:
         if name == "codex":
             # handled separately in chat()
             raise ValueError("codex provider must be handled by CodexService")
+        if name == "claude":
+            # handled separately in chat()
+            raise ValueError("claude provider must be handled by ClaudeService")
+        if name == "openclaw":
+            # handled separately in chat()
+            raise ValueError("openclaw provider must be handled by OpenClawService")
+        if name == "glm":
+            return OpenAiProvider(
+                api_key=self._settings.glm_api_key,
+                base_url=self._settings.glm_base_url,
+                outputs_dir=self._settings.outputs_dir,
+            )
         if name != "openai":
             raise ValueError(f"Unknown provider: {name}")
         return OpenAiProvider(
@@ -701,6 +724,193 @@ class AgentService:
                             "write": effective_write,
                             "browser": effective_browser,
                             "dangerous": effective_dangerous,
+                        },
+                    },
+                    *result.events,
+                ],
+                "opencode_session_id": None,
+            }
+
+        if provider_name == "openclaw":
+            if OpenClawService is None:
+                raise ValueError("openclaw provider is not available in current deployment")
+            session = await store.get_or_create(
+                session_id=sid,
+                user_id=user_id,
+                team_id=team_id,
+                role=role,
+                system_prompt=f"openclaw:{role}",
+                workspace_root=str(workspace),
+                ttl_seconds=max(0, int(self._settings.session_ttl_minutes)) * 60,
+                max_sessions=max(0, int(self._settings.max_sessions)),
+            )
+
+            extra_system = ""
+            if team_skills_prompt and team_skills_prompt.strip():
+                extra_system = team_skills_prompt.strip()
+            if summary_text:
+                extra_system = f"{extra_system}\n\n{summary_text}" if extra_system else summary_text
+
+            svc = OpenClawService(self._settings)
+            try:
+                result = await svc.chat(
+                    session=session,
+                    message=message,
+                    role=role,
+                    model=model,
+                    workspace_root=workspace,
+                    system_prompt=extra_system or None,
+                )
+            except ValueError as e:
+                raw = str(e)
+                text = raw.lower()
+                if "unhandled stop reason: sensitive" in text or "stop reason: sensitive" in text:
+                    result = OpenClawChatResult(
+                        assistant="这次请求触发了模型安全策略（sensitive），我没法直接继续。你可以换个更中性、更具体的表述，我马上继续帮你。",
+                        openclaw_session_id=session.session_id,
+                        events=[{"type": "openclaw_blocked", "reason": "sensitive"}],
+                    )
+                elif "no stderr/stdout" in text or "gateway closed" in text or "模型鉴权失败" in text:
+                    fallback_provider: str | None = None
+                    if self._settings.glm_api_key:
+                        fallback_provider = "glm"
+                    elif self._settings.openai_api_key:
+                        fallback_provider = "openai"
+
+                    if not fallback_provider:
+                        raise
+
+                    fallback_resp = await self.chat(
+                        message=message,
+                        session_id=sid,
+                        role=role,
+                        user_id=user_id,
+                        team_id=team_id,
+                        provider=fallback_provider,
+                        model=(self._settings.glm_model if fallback_provider == "glm" else self._settings.model),
+                        workspace_root=workspace,
+                        security_preset=security_profile,
+                        enable_shell=requested_shell,
+                        enable_write=requested_write,
+                        enable_browser=requested_browser,
+                        enable_dangerous=bool(enable_dangerous),
+                        show_reasoning=show_reasoning,
+                        attachments=attachments,
+                        team_skills_prompt=team_skills_prompt,
+                    )
+                    fallback_events = list(fallback_resp.get("events") or [])
+                    fallback_resp["events"] = [
+                        {
+                            "type": "openclaw_fallback",
+                            "reason": (raw[:500] + "…") if len(raw) > 500 else raw,
+                            "fallback_provider": fallback_provider,
+                        },
+                        *fallback_events,
+                    ]
+                    return fallback_resp
+                else:
+                    raise
+
+            await store.update_messages(
+                session_id=sid,
+                user_id=user_id,
+                team_id=team_id,
+                messages=[
+                    *session.messages,
+                    ChatMessage(role="user", content=message, attachments=attachments or None),
+                    ChatMessage(role="assistant", content=result.assistant),
+                ],
+                max_messages=max(0, int(self._settings.max_session_messages)),
+                max_chars=max(0, int(self._settings.max_context_chars)),
+            )
+
+            return {
+                "session_id": sid,
+                "assistant": result.assistant,
+                "events": [
+                    {
+                        "type": "security_profile",
+                        "preset": security_profile,
+                        "requested": {
+                            "shell": requested_shell,
+                            "write": requested_write,
+                            "browser": requested_browser,
+                            "dangerous": bool(enable_dangerous),
+                        },
+                        "effective": {
+                            "shell": False,
+                            "write": False,
+                            "browser": False,
+                            "dangerous": False,
+                        },
+                    },
+                    *result.events,
+                ],
+                "opencode_session_id": None,
+                "openclaw_session_id": result.openclaw_session_id,
+            }
+
+        if provider_name == "claude":
+            if ClaudeService is None:
+                raise ValueError("claude provider is not available in current deployment")
+            session = await store.get_or_create(
+                session_id=sid,
+                user_id=user_id,
+                team_id=team_id,
+                role=role,
+                system_prompt=f"claude:{role}",
+                workspace_root=str(workspace),
+                ttl_seconds=max(0, int(self._settings.session_ttl_minutes)) * 60,
+                max_sessions=max(0, int(self._settings.max_sessions)),
+            )
+
+            extra_system = ""
+            if team_skills_prompt and team_skills_prompt.strip():
+                extra_system = team_skills_prompt.strip()
+            if summary_text:
+                extra_system = f"{extra_system}\n\n{summary_text}" if extra_system else summary_text
+
+            svc = ClaudeService(self._settings)
+            result = await svc.chat(
+                session=session,
+                message=message,
+                role=role,
+                model=model,
+                workspace_root=workspace,
+                system_prompt=extra_system or None,
+            )
+
+            await store.update_messages(
+                session_id=sid,
+                user_id=user_id,
+                team_id=team_id,
+                messages=[
+                    *session.messages,
+                    ChatMessage(role="user", content=message, attachments=attachments or None),
+                    ChatMessage(role="assistant", content=result.assistant),
+                ],
+                max_messages=max(0, int(self._settings.max_session_messages)),
+                max_chars=max(0, int(self._settings.max_context_chars)),
+            )
+
+            return {
+                "session_id": sid,
+                "assistant": result.assistant,
+                "events": [
+                    {
+                        "type": "security_profile",
+                        "preset": security_profile,
+                        "requested": {
+                            "shell": requested_shell,
+                            "write": requested_write,
+                            "browser": requested_browser,
+                            "dangerous": bool(enable_dangerous),
+                        },
+                        "effective": {
+                            "shell": False,
+                            "write": False,
+                            "browser": False,
+                            "dangerous": False,
                         },
                     },
                     *result.events,
@@ -1500,7 +1710,7 @@ class AgentService:
             max_context_chars=max(0, int(self._settings.max_context_chars)),
         )
 
-        used_model = model or self._settings.model
+        used_model = model or (self._settings.glm_model if provider_name == "glm" else self._settings.model)
 
         # upsert runtime system message (keep it near the top)
         runtime = _runtime_system_prompt(

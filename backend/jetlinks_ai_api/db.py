@@ -16,7 +16,7 @@ from .config import Settings
 from .time_utils import UTC
 
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 _ID_RETURNING_TABLES = {
     "users",
     "teams",
@@ -627,6 +627,54 @@ async def init_db(settings: Settings) -> None:
                   FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE SET NULL
                 )
                 """,
+                """
+                CREATE TABLE IF NOT EXISTS openclaw_sessions (
+                  id BIGSERIAL PRIMARY KEY,
+                  team_id BIGINT NOT NULL,
+                  user_id BIGINT NOT NULL,
+                  chat_session_id TEXT NOT NULL,
+                  openclaw_session_id TEXT NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'active',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE(team_id, chat_session_id),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                  FOREIGN KEY (chat_session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS openclaw_channels (
+                  id BIGSERIAL PRIMARY KEY,
+                  team_id BIGINT NOT NULL,
+                  channel_key TEXT NOT NULL,
+                  channel_type TEXT NOT NULL DEFAULT '',
+                  external_id TEXT NOT NULL DEFAULT '',
+                  name TEXT NOT NULL DEFAULT '',
+                  enabled INTEGER NOT NULL DEFAULT 1,
+                  meta_json TEXT NOT NULL DEFAULT '{}',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE(team_id, channel_key),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS openclaw_plugins (
+                  id BIGSERIAL PRIMARY KEY,
+                  team_id BIGINT NOT NULL,
+                  plugin_key TEXT NOT NULL,
+                  name TEXT NOT NULL DEFAULT '',
+                  version TEXT NOT NULL DEFAULT '',
+                  source TEXT NOT NULL DEFAULT '',
+                  enabled INTEGER NOT NULL DEFAULT 1,
+                  meta_json TEXT NOT NULL DEFAULT '{}',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE(team_id, plugin_key),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                )
+                """,
                 "CREATE INDEX IF NOT EXISTS idx_team_skills_team_id ON team_skills(team_id)",
                 "CREATE INDEX IF NOT EXISTS idx_memberships_team_id ON memberships(team_id)",
                 "CREATE INDEX IF NOT EXISTS idx_invites_team_id ON invites(team_id)",
@@ -646,6 +694,9 @@ async def init_db(settings: Settings) -> None:
                 "CREATE INDEX IF NOT EXISTS idx_chat_sessions_team_user_updated ON chat_sessions(team_id, user_id, updated_at)",
                 "CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id, id)",
                 "CREATE INDEX IF NOT EXISTS idx_file_records_team_user_created ON file_records(team_id, user_id, created_at)",
+                "CREATE INDEX IF NOT EXISTS idx_openclaw_sessions_team_chat ON openclaw_sessions(team_id, chat_session_id)",
+                "CREATE INDEX IF NOT EXISTS idx_openclaw_channels_team ON openclaw_channels(team_id)",
+                "CREATE INDEX IF NOT EXISTS idx_openclaw_plugins_team ON openclaw_plugins(team_id)",
             ]
             for stmt in statements:
                 await db.execute(stmt)
@@ -885,6 +936,51 @@ async def init_db(settings: Settings) -> None:
                   FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE SET NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS openclaw_sessions (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  user_id INTEGER NOT NULL,
+                  chat_session_id TEXT NOT NULL,
+                  openclaw_session_id TEXT NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'active',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE(team_id, chat_session_id),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                  FOREIGN KEY (chat_session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS openclaw_channels (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  channel_key TEXT NOT NULL,
+                  channel_type TEXT NOT NULL DEFAULT '',
+                  external_id TEXT NOT NULL DEFAULT '',
+                  name TEXT NOT NULL DEFAULT '',
+                  enabled INTEGER NOT NULL DEFAULT 1,
+                  meta_json TEXT NOT NULL DEFAULT '{}',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE(team_id, channel_key),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS openclaw_plugins (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  plugin_key TEXT NOT NULL,
+                  name TEXT NOT NULL DEFAULT '',
+                  version TEXT NOT NULL DEFAULT '',
+                  source TEXT NOT NULL DEFAULT '',
+                  enabled INTEGER NOT NULL DEFAULT 1,
+                  meta_json TEXT NOT NULL DEFAULT '{}',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE(team_id, plugin_key),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_team_skills_team_id ON team_skills(team_id);
                 CREATE INDEX IF NOT EXISTS idx_memberships_team_id ON memberships(team_id);
                 CREATE INDEX IF NOT EXISTS idx_invites_team_id ON invites(team_id);
@@ -905,6 +1001,9 @@ async def init_db(settings: Settings) -> None:
                 CREATE INDEX IF NOT EXISTS idx_chat_sessions_team_user_updated ON chat_sessions(team_id, user_id, updated_at);
                 CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id, id);
                 CREATE INDEX IF NOT EXISTS idx_file_records_team_user_created ON file_records(team_id, user_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_openclaw_sessions_team_chat ON openclaw_sessions(team_id, chat_session_id);
+                CREATE INDEX IF NOT EXISTS idx_openclaw_channels_team ON openclaw_channels(team_id);
+                CREATE INDEX IF NOT EXISTS idx_openclaw_plugins_team ON openclaw_plugins(team_id);
                 """
             )
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
 from ..db import fetchall, fetchone, row_to_dict, rows_to_dicts, utc_now_iso
-from ..deps import CurrentUser, get_current_user, get_db, get_settings
+from ..deps import CurrentUser, get_current_user, get_db, get_settings, is_super_user
 from ..env_utils import env_str
 from ..services.auth_service import create_access_token, hash_password, verify_password
 from ..services.team_skill_seed_service import ensure_default_team_skills
@@ -115,7 +115,7 @@ async def login(req: LoginRequest, settings=Depends(get_settings), db=Depends(ge
         raise HTTPException(status_code=401, detail="账号或密码错误")
 
     user_id = int(user["id"])
-    is_super = email in settings.super_emails
+    is_super = is_super_user(settings, email)
 
     active_team: dict | None = None
     if req.team_id is not None:
@@ -392,6 +392,7 @@ class MeResponse(BaseModel):
     user: dict
     teams: list[dict]
     active_team: dict
+    is_super_admin: bool = False
 
 
 @router.get("/me", response_model=MeResponse)
@@ -400,7 +401,7 @@ async def me(
     db=Depends(get_db),  # noqa: ANN001
     settings=Depends(get_settings),  # noqa: ANN001
 ) -> MeResponse:
-    is_super = str(user.email).strip().lower() in settings.super_emails
+    is_super = is_super_user(settings, str(user.email))
     if is_super:
         teams_rows = await fetchall(
             db,
@@ -430,7 +431,12 @@ async def me(
         )
         teams = rows_to_dicts(list(teams_rows))
     active = {"id": user.team_id, "name": user.team_name, "role": user.team_role}
-    return MeResponse(user={"id": user.id, "email": user.email, "name": user.name}, teams=teams, active_team=active)
+    return MeResponse(
+        user={"id": user.id, "email": user.email, "name": user.name},
+        teams=teams,
+        active_team=active,
+        is_super_admin=bool(is_super),
+    )
 
 
 class SwitchTeamRequest(BaseModel):
@@ -444,7 +450,7 @@ async def switch_team(
     settings=Depends(get_settings),  # noqa: ANN001
     db=Depends(get_db),  # noqa: ANN001
 ) -> AuthResponse:
-    is_super = str(user.email).strip().lower() in settings.super_emails
+    is_super = is_super_user(settings, str(user.email))
 
     mem_row = await fetchone(
         db,

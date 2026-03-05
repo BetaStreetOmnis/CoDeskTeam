@@ -262,12 +262,13 @@ class CodexService:
                 include_history=include_history,
             )
 
-        prompt = build_prompt(resume_id is None)
+        # Compatibility: some codex-cli versions don't support advanced flags
+        # on `exec resume` subcommand (e.g. --sandbox/--model). We always run
+        # `exec` and continue context via injected history text.
+        prompt = build_prompt(True)
 
         def build_args(next_resume_id: str | None) -> list[str]:
             base: list[str] = [*cmd, "exec"]
-            if next_resume_id:
-                base.append("resume")
             if dangerous_bypass:
                 base.append("--dangerously-bypass-approvals-and-sandbox")
 
@@ -275,8 +276,6 @@ class CodexService:
                 [
                     "--json",
                     "--skip-git-repo-check",
-                    "--color",
-                    "never",
                     "--sandbox",
                     sandbox,
                     "-c",
@@ -305,9 +304,6 @@ class CodexService:
 
             for p in image_paths:
                 base.extend(["-i", str(p)])
-
-            if next_resume_id:
-                base.append(next_resume_id)
 
             return base
 

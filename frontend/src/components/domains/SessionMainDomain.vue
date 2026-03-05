@@ -43,16 +43,13 @@
           <div ref="chatBodyRef" class="chatBody" @scroll="onChatBodyScroll">
             <div v-if="messages.length === 0" class="empty">
               <div class="emptyTitle">从一个任务开始</div>
-              <div class="emptyHint">例如：写报价单、写方案 PPT、做原型、或者帮我改代码。</div>
+              <div class="emptyHint">例如：写报价单、做 AI 巡检原型、或者帮我改代码。</div>
               <div class="emptyChips">
-                <button class="suggestChip" type="button" @click="applyQuickPrompt('帮我做一份《大模型培训（全员版）》8页PPT：时长=60分钟，方向=通识+办公提效+安全合规。')">
-                  生成培训 PPT
-                </button>
                 <button class="suggestChip" type="button" @click="applyQuickPrompt('根据以下产品清单生成一份报价单（含 Excel 下载）：\\n1) 产品A，数量=1，单价=\\n2) 产品B，数量=，单价=')">
                   生成报价单
                 </button>
-                <button class="suggestChip" type="button" @click="applyQuickPrompt('帮我做一个多页面原型（HTML打包ZIP）：\\n- 页面：登录、列表、详情、设置\\n- 风格：现代简洁\\n- 输出：可点击跳转')">
-                  生成原型 ZIP
+                <button class="suggestChip" type="button" @click="applyQuickPrompt('帮我做一个 AI 巡检原型项目（HTML 打包 ZIP）：\\n- 页面：驾驶舱、任务列表、巡检详情、告警中心、策略配置\\n- 风格：深色大屏科技风\\n- 重点：设备状态、缺陷识别、告警闭环、工单流转\\n- 输出：可点击跳转原型')">
+                  AI巡检原型项目
                 </button>
                 <button class="suggestChip" type="button" @click="applyQuickPrompt('帮我优化这个项目的前端界面：统一视觉风格、提升可用性、移动端适配。')">
                   优化界面
@@ -302,8 +299,10 @@
               <div class="typing">
                 <span class="spinner" />
                 <div class="typingText">
-                  <div>思考中… {{ sendingElapsed }}s</div>
-                  <div v-if="sendingElapsed >= 10" class="subtle">模型计算较慢，可继续等待或取消</div>
+                  <div>正在执行（{{ sendingElapsed }}s）</div>
+                  <div v-for="(line, idx) in sendingProgressLines(provider, sendingElapsed)" :key="`sending-${idx}`" class="subtle">
+                    {{ line }}
+                  </div>
                 </div>
                 <button class="ghostBtn tinyBtn" type="button" @click="cancelSend">取消</button>
               </div>

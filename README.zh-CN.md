@@ -515,7 +515,7 @@ sudo systemctl status codeskteam
 
 模型与 provider：
 
-- `JETLINKS_AI_PROVIDER=openai|codex|mock|opencode|nanobot`
+- `JETLINKS_AI_PROVIDER=openai|codex|openclaw|mock|opencode|nanobot`
 - `JETLINKS_AI_MODEL=gpt-5.2`
 - `OPENAI_API_KEY=...`
 - `OPENAI_BASE_URL=...`（兼容网关会自动补 `/v1`）

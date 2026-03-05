@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: jetlinks-ai-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jetlinks_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-jetlinks_ai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jetlinks_ai_change_me}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ${JETLINKS_AI_PGDATA_DIR:-/data/nvme0/jetlinks-ai-data/pgdata}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jetlinks_ai} -d ${POSTGRES_DB:-jetlinks_ai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: jetlinks-ai:910b
+    container_name: jetlinks-ai-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      JETLINKS_AI_DB_URL: postgresql://${POSTGRES_USER:-jetlinks_ai}:${POSTGRES_PASSWORD:-jetlinks_ai_change_me}@postgres:5432/${POSTGRES_DB:-jetlinks_ai}
+      JETLINKS_AI_DATA_DIR: /data/.aistaff
+      JETLINKS_AI_OUTPUTS_DIR: /data/outputs
+      JETLINKS_AI_WORKSPACE: /workspace
+      JETLINKS_AI_CODEX_CMD: /usr/local/bin/codex-host
+      JETLINKS_AI_NANOBOT_CMD: /usr/local/bin/nanobot
+      JETLINKS_AI_UI_DIST_DIR: /app/frontend/dist
+    ports:
+      - "0.0.0.0:8001:8001"
+    volumes:
+      - ${JETLINKS_AI_DATA_DIR_HOST:-/data/nvme0/jetlinks-ai-data/.aistaff}:/data/.aistaff
+      - ${JETLINKS_AI_OUTPUTS_DIR_HOST:-/data/nvme0/jetlinks-ai-data/outputs}:/data/outputs
+      - ${JETLINKS_AI_WORKSPACE_HOST:-/data/nvme0/jetlinks-ai-data/workspace}:/workspace
+      - ${JETLINKS_AI_OLD_DATA_DIR_HOST:-/data/nvme0/jetlinks-ai/.aistaff}:/legacy-data:ro
+      - /usr/local/node20:/opt/host-node20:ro

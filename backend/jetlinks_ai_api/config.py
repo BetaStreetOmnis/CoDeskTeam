@@ -33,12 +33,16 @@ class Settings:
     model: str
     openai_api_key: str | None
     openai_base_url: str
+    glm_api_key: str | None
+    glm_base_url: str
+    glm_model: str
     public_base_url: str
     workspace_root: Path
     projects_roots: list[Path]
     workspace_layout: str
     workspace_user_dir: str
     super_emails: frozenset[str]
+    super_all: bool
     db_url: str | None
     outputs_dir: Path
     data_dir: Path
@@ -63,6 +67,9 @@ class Settings:
     codex_timeout_seconds: int
     codex_reasoning_effort: str
     codex_allow_dangerous: bool
+    claude_command: str
+    claude_timeout_seconds: int
+    claude_model: str
     opencode_base_url: str
     opencode_username: str
     opencode_password: str | None
@@ -82,6 +89,15 @@ class Settings:
     pi_mono_dir: Path
     pi_agent_dir: Path
     pi_enable_tools: bool
+    openclaw_enabled: bool
+    openclaw_embedded: bool
+    openclaw_command: str
+    openclaw_gateway_command: str | None
+    openclaw_gateway_base_url: str
+    openclaw_gateway_port: int
+    openclaw_gateway_bind: str
+    openclaw_working_dir: Path
+    openclaw_timeout_seconds: int
 
 
 def _pick_default_data_dir(repo_root: Path) -> Path:
@@ -170,12 +186,16 @@ def load_settings() -> Settings:
         model=env_str("MODEL", "gpt-5.2") or "gpt-5.2",
         openai_api_key=_raw_env_str("OPENAI_API_KEY", None),
         openai_base_url=_raw_env_str("OPENAI_BASE_URL", "https://api.openai.com/v1") or "https://api.openai.com/v1",
+        glm_api_key=_raw_env_str("GLM_API_KEY", None),
+        glm_base_url=_raw_env_str("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4") or "https://open.bigmodel.cn/api/paas/v4",
+        glm_model=env_str("GLM_MODEL", "glm-4.5") or "glm-4.5",
         public_base_url=public_base_url,
         workspace_root=workspace_root,
         projects_roots=projects_roots,
         workspace_layout=workspace_layout,
         workspace_user_dir=workspace_user_dir,
         super_emails=super_emails,
+        super_all=env_bool("SUPER_ALL", False),
         db_url=db_url,
         outputs_dir=outputs_dir,
         data_dir=data_dir,
@@ -200,6 +220,9 @@ def load_settings() -> Settings:
         codex_timeout_seconds=env_int("CODEX_TIMEOUT_SECONDS", 300),
         codex_reasoning_effort=env_str("CODEX_REASONING_EFFORT", "medium") or "medium",
         codex_allow_dangerous=env_bool("CODEX_ALLOW_DANGEROUS", False),
+        claude_command=env_str("CLAUDE_CMD", "/usr/local/bin/claude-host") or "/usr/local/bin/claude-host",
+        claude_timeout_seconds=env_int("CLAUDE_TIMEOUT_SECONDS", 300),
+        claude_model=env_str("CLAUDE_MODEL", "glm-4.7") or "glm-4.7",
         opencode_base_url=env_str("OPENCODE_BASE_URL", "http://127.0.0.1:4096") or "http://127.0.0.1:4096",
         opencode_username=env_str("OPENCODE_USERNAME", "opencode") or "opencode",
         opencode_password=env_str("OPENCODE_PASSWORD", None),
@@ -223,4 +246,20 @@ def load_settings() -> Settings:
         pi_mono_dir=pi_mono_dir,
         pi_agent_dir=pi_agent_dir,
         pi_enable_tools=env_bool("PI_ENABLE_TOOLS", False),
+        openclaw_enabled=env_bool("ENABLE_OPENCLAW", True),
+        openclaw_embedded=env_bool("OPENCLAW_EMBEDDED", False),
+        openclaw_command=env_str("OPENCLAW_CMD", "openclaw") or "openclaw",
+        openclaw_gateway_command=env_str("OPENCLAW_GATEWAY_CMD", None),
+        openclaw_gateway_base_url=(
+            env_str("OPENCLAW_GATEWAY_BASE_URL", "http://127.0.0.1:18789") or "http://127.0.0.1:18789"
+        ).strip().rstrip("/"),
+        openclaw_gateway_port=env_int("OPENCLAW_GATEWAY_PORT", 18789),
+        openclaw_gateway_bind=env_str("OPENCLAW_GATEWAY_BIND", "loopback") or "loopback",
+        openclaw_working_dir=Path(
+            env_str("OPENCLAW_WORKDIR", str(repo_root / "third_party" / "openclaw"))
+            or str(repo_root / "third_party" / "openclaw")
+        )
+        .expanduser()
+        .resolve(),
+        openclaw_timeout_seconds=env_int("OPENCLAW_TIMEOUT_SECONDS", 300),
     )

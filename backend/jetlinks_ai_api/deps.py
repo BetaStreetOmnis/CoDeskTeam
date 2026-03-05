@@ -31,7 +31,13 @@ def get_settings(request: Request) -> Settings:
     return load_settings()
 
 def _is_super(settings: Settings, email: str) -> bool:
+    if bool(getattr(settings, "super_all", False)):
+        return True
     return str(email or "").strip().lower() in settings.super_emails
+
+
+def is_super_user(settings: Settings, email: str) -> bool:
+    return _is_super(settings, email)
 
 
 async def get_db(settings: Settings = Depends(get_settings)) -> AsyncIterator:

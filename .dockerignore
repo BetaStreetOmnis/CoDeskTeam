@@ -1,0 +1,12 @@
+.git
+.gitignore
+.aistaff
+outputs
+node_modules
+frontend/node_modules
+dist
+third_party
+docs
+tmp_*
+*.log
+*.tar.gz

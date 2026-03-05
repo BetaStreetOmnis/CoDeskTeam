@@ -318,7 +318,7 @@ import type {
 		} from "./api/index"
 
 	type Theme = "light" | "dark"
-	type Provider = "openai" | "mock" | "opencode" | "nanobot" | "codex" | "pi"
+	type Provider = "openai" | "glm" | "mock" | "opencode" | "nanobot" | "codex" | "claude" | "openclaw" | "pi"
   type Vibe = "toc" | "pro" | "notebook"
   type RoleMode = "general" | "engineer"
   type SecurityPreset = "safe" | "standard" | "power" | "custom"
@@ -544,11 +544,14 @@ const densityLabel = computed(() => {
   return "标准"
 })
 
-const availableProviders = ref<Provider[]>(["openai", "codex", "opencode", "nanobot", "mock"])
+const availableProviders = ref<Provider[]>(["openai", "glm", "codex", "claude", "openclaw", "opencode", "nanobot", "mock"])
 
 const storedProvider = localStorage.getItem("aistaff_provider")
 const provider = ref<Provider>(
   storedProvider === "openai" ||
+    storedProvider === "glm" ||
+    storedProvider === "claude" ||
+    storedProvider === "openclaw" ||
     storedProvider === "opencode" ||
     storedProvider === "nanobot" ||
     storedProvider === "codex" ||
@@ -1704,7 +1707,7 @@ function summarizeTrace(events: any[]): string[] {
       continue
     }
 
-    if (type === "opencode_done" || type === "nanobot_done" || type === "codex_done") {
+    if (type === "opencode_done" || type === "nanobot_done" || type === "codex_done" || type === "openclaw_done") {
       const ms = Number((ev as any).elapsed_ms ?? 0)
       if (Number.isFinite(ms) && ms > 0) steps.push(`完成：耗时 ${ms}ms`)
       continue
@@ -1876,7 +1879,7 @@ function structuredTrace(events: any[]): StructuredTraceStep[] {
       continue
     }
 
-    if (type === "opencode_done" || type === "nanobot_done" || type === "codex_done") {
+    if (type === "opencode_done" || type === "nanobot_done" || type === "codex_done" || type === "openclaw_done") {
       const ms = Number((ev as any).elapsed_ms ?? 0)
       steps.push({
         key: `done-${steps.length}`,
@@ -1884,6 +1887,17 @@ function structuredTrace(events: any[]): StructuredTraceStep[] {
         title: "任务完成",
         detail: Number.isFinite(ms) && ms > 0 ? `耗时 ${ms}ms` : undefined,
         level: "success",
+      })
+      continue
+    }
+
+    if (type === "openclaw_warning") {
+      steps.push({
+        key: `openclaw-warning-${steps.length}`,
+        phase: "提示",
+        title: "OpenClaw 输出了额外日志",
+        detail: String((ev as any).message || "").trim() || undefined,
+        level: "warn",
       })
       continue
     }
@@ -1917,6 +1931,29 @@ function structuredTrace(events: any[]): StructuredTraceStep[] {
     deduped.push(step)
   }
   return deduped.slice(0, 40)
+}
+
+function sendingProgressLines(providerName: string, elapsedSec: number): string[] {
+  const p = String(providerName || "openai").toLowerCase()
+  const engine =
+    p === "openclaw"
+      ? "OpenClaw（GLM-5）"
+      : p === "codex"
+        ? "Codex"
+        : p === "nanobot"
+          ? "NanoBot"
+          : p === "opencode"
+            ? "OpenCode"
+            : p === "claude"
+              ? "Claude Code"
+              : p === "glm"
+                ? "GLM"
+                : "模型引擎"
+
+  if (elapsedSec < 4) return ["已接收请求，正在整理上下文", `准备调用 ${engine}`]
+  if (elapsedSec < 12) return [`正在调用 ${engine}`, "等待模型返回首段结果"]
+  if (elapsedSec < 25) return ["模型计算中", "正在整理可读回复"]
+  return ["任务仍在执行中", "可继续等待，或点击“取消”停止本次请求"]
 }
 
 const downloadsByMessageId = computed<Record<string, DownloadLink[]>>(() => {
@@ -2201,6 +2238,9 @@ function loadHistoryIntoChat() {
   role.value = nextRole
   const nextProvider =
     detail.session.provider === "openai" ||
+    detail.session.provider === "glm" ||
+    detail.session.provider === "claude" ||
+    detail.session.provider === "openclaw" ||
     detail.session.provider === "opencode" ||
     detail.session.provider === "nanobot" ||
     detail.session.provider === "codex" ||
@@ -3786,6 +3826,7 @@ const appDomainCtx = {
   extractQuotePreviewFromEvents,
   extractProtoPreviewFromEvents,
   summarizeTrace,
+  sendingProgressLines,
   formatToolToggleSet,
   traceToolHint,
   structuredTrace,
@@ -3889,7 +3930,7 @@ onMounted(async () => {
   const metaTask = withTimeout(getMeta(), 4500, "meta")
     .then((m) => {
       const raw = Array.isArray(m?.providers) ? m.providers : []
-      const known: Provider[] = ["openai", "codex", "opencode", "nanobot", "mock", "pi"]
+      const known: Provider[] = ["openai", "glm", "codex", "claude", "openclaw", "opencode", "nanobot", "mock", "pi"]
       const next = known.filter((p) => raw.includes(p))
       if (next.length) availableProviders.value = next
       if (!availableProviders.value.includes(provider.value)) {

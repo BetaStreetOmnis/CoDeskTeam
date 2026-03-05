@@ -34,6 +34,10 @@ def _normalize_openai_base_url(base_url: str) -> str:
     base = (base_url or "").strip().rstrip("/")
     if not base:
         return base
+    # GLM (BigModel) OpenAI-compatible endpoint uses /api/paas/v4 directly.
+    # If we append /v1 here, requests become /v4/v1/* and will 404.
+    if "open.bigmodel.cn/api/paas/v4" in base.lower():
+        return base
     if _V1_RE.search(base):
         return base
     return f"{base}/v1"

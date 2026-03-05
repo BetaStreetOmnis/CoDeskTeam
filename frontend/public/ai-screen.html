@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI巡检大屏</title>
+    <style>
+      :root {
+        --bg: #07111f;
+        --panel: rgba(13, 29, 52, 0.72);
+        --line: #244b7f;
+        --text: #d8e9ff;
+        --sub: #8fb5e8;
+        --ok: #21d69f;
+        --warn: #ffc857;
+        --err: #ff6b6b;
+        --accent: #2bb5ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 80% 10%, rgba(43, 181, 255, 0.18), transparent 35%),
+          radial-gradient(circle at 20% 90%, rgba(33, 214, 159, 0.14), transparent 30%),
+          var(--bg);
+      }
+      .wrap { min-height: 100vh; padding: 16px; }
+      .top {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .title { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
+      .time { color: var(--sub); font-size: 14px; }
+      .grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr 1fr;
+        gap: 12px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        backdrop-filter: blur(4px);
+      }
+      .panel h3 { margin: 0 0 10px 0; font-size: 15px; color: #b6d8ff; }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .card {
+        background: rgba(10, 29, 55, 0.7);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+      }
+      .label { color: var(--sub); font-size: 12px; }
+      .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+      .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); } .accent { color: var(--accent); }
+      .list { max-height: 320px; overflow: auto; }
+      .item {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px dashed rgba(143, 181, 232, 0.2);
+        font-size: 13px;
+      }
+      .chip { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+      .chip.ok { background: rgba(33, 214, 159, 0.15); }
+      .chip.warn { background: rgba(255, 200, 87, 0.15); }
+      .chip.err { background: rgba(255, 107, 107, 0.15); }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 8px 0;
+      }
+      .bar > span:first-child { width: 110px; color: var(--sub); font-size: 12px; }
+      .track { flex: 1; height: 8px; border-radius: 6px; background: rgba(143, 181, 232, 0.2); overflow: hidden; }
+      .fill { height: 100%; background: linear-gradient(90deg, #2bb5ff, #21d69f); }
+      .footer { margin-top: 10px; color: var(--sub); font-size: 12px; }
+      @media (max-width: 1200px) {
+        .grid { grid-template-columns: 1fr; }
+        .cards { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <div class="title">AI 巡检可视化大屏</div>
+        <div id="time" class="time"></div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="label">在线设备</div><div id="online" class="value accent">0</div></div>
+        <div class="card"><div class="label">今日巡检任务</div><div id="tasks" class="value">0</div></div>
+        <div class="card"><div class="label">告警总数</div><div id="alarms" class="value warn">0</div></div>
+        <div class="card"><div class="label">闭环率</div><div id="closure" class="value ok">0%</div></div>
+      </div>
+      <div class="grid">
+        <div class="panel">
+          <h3>实时巡检任务</h3>
+          <div id="taskList" class="list"></div>
+        </div>
+        <div class="panel">
+          <h3>模型识别分布</h3>
+          <div class="bar"><span>烟雾异常</span><div class="track"><div id="b1" class="fill"></div></div><span id="t1">0%</span></div>
+          <div class="bar"><span>温度异常</span><div class="track"><div id="b2" class="fill"></div></div><span id="t2">0%</span></div>
+          <div class="bar"><span>设备离线</span><div class="track"><div id="b3" class="fill"></div></div><span id="t3">0%</span></div>
+          <div class="bar"><span>违规操作</span><div class="track"><div id="b4" class="fill"></div></div><span id="t4">0%</span></div>
+          <div class="footer">提示：此页面为原型展示，可对接真实 API 替换数据。</div>
+        </div>
+        <div class="panel">
+          <h3>告警闭环看板</h3>
+          <div id="alarmList" class="list"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+      const statusCls = s => s === "正常" ? "ok" : s === "处理中" ? "warn" : "err";
+      function nowStr() {
+        const d = new Date();
+        return d.toLocaleString("zh-CN", { hour12: false });
+      }
+      function render() {
+        document.getElementById("time").textContent = "更新时间：" + nowStr();
+        const online = rnd(420, 460), tasks = rnd(80, 120), alarms = rnd(18, 36), closure = rnd(85, 97);
+        document.getElementById("online").textContent = online;
+        document.getElementById("tasks").textContent = tasks;
+        document.getElementById("alarms").textContent = alarms;
+        document.getElementById("closure").textContent = closure + "%";
+        const bars = [rnd(18, 40), rnd(12, 32), rnd(8, 26), rnd(10, 30)];
+        bars.forEach((v, i) => {
+          document.getElementById("b" + (i + 1)).style.width = v + "%";
+          document.getElementById("t" + (i + 1)).textContent = v + "%";
+        });
+        const taskRows = Array.from({ length: 8 }).map((_, i) => {
+          const dev = "设备-" + (1000 + i);
+          const area = ["A区", "B区", "C区", "D区"][i % 4];
+          const st = ["正常", "处理中", "告警"][rnd(0, 2)];
+          return `<div class="item"><span>${dev}（${area}）</span><span>${rnd(1, 59)} 分钟前</span><span class="chip ${statusCls(st)}">${st}</span></div>`;
+        }).join("");
+        document.getElementById("taskList").innerHTML = taskRows;
+        const alarmRows = Array.from({ length: 8 }).map((_, i) => {
+          const type = ["烟雾异常", "温度过高", "设备离线", "违规操作"][i % 4];
+          const st = ["已闭环", "待处理", "处理中"][rnd(0, 2)];
+          const cls = st === "已闭环" ? "ok" : st === "处理中" ? "warn" : "err";
+          return `<div class="item"><span>${type}</span><span>${rnd(1, 90)} 分钟前</span><span class="chip ${cls}">${st}</span></div>`;
+        }).join("");
+        document.getElementById("alarmList").innerHTML = alarmRows;
+      }
+      render();
+      setInterval(render, 8000);
+      setInterval(() => document.getElementById("time").textContent = "更新时间：" + nowStr(), 1000);
+    </script>
+  </body>
+</html>

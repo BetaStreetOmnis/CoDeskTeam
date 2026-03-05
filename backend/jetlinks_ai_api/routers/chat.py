@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
+import shutil
 from pathlib import Path
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
+import httpx
 from pydantic import BaseModel, Field
 
 from ..agent.types import ChatMessage
 from ..db import fetchall, fetchone, row_to_dict, rows_to_dicts, utc_now_iso
 from ..deps import CurrentUser, get_current_user, get_db, get_settings
+from ..env_utils import env_bool
 from ..project_utils import resolve_project_path, resolve_user_workspace_root
 from ..services.agent_service import AgentService
 from ..services.team_skill_seed_service import ensure_default_team_skills
@@ -144,18 +148,31 @@ async def chat(
     service = AgentService(settings)
 
     try:
+        if req.project_id is not None:
+            try:
+                if int(req.project_id) <= 0:
+                    req.project_id = None
+            except Exception:
+                req.project_id = None
+
         requested_shell, requested_write, requested_browser = _resolve_security_toggles(
             req.security_preset,
             req.enable_shell,
             req.enable_write,
             req.enable_browser,
         )
+        require_admin_for_dangerous = env_bool("DANGEROUS_REQUIRE_ADMIN", True)
         provider_name = (req.provider or settings.provider or "openai").lower()
-        if user.team_role not in {"owner", "admin"} and any(
+        if require_admin_for_dangerous and user.team_role not in {"owner", "admin"} and any(
             [requested_shell, requested_write, requested_browser]
         ):
             raise HTTPException(status_code=403, detail="需要团队管理员权限启用高危工具（shell/write/browser）")
-        if req.enable_dangerous and provider_name == "codex" and user.team_role not in {"owner", "admin"}:
+        if (
+            require_admin_for_dangerous
+            and req.enable_dangerous
+            and provider_name == "codex"
+            and user.team_role not in {"owner", "admin"}
+        ):
             raise HTTPException(status_code=403, detail="需要团队管理员权限启用无沙箱模式（Codex）")
 
         # Guard: prevent reusing a persisted session_id owned by another user/team (can happen after server restart).
@@ -308,13 +325,63 @@ async def chat(
             except Exception:
                 pass
 
+        effective_provider = (req.provider or "").strip().lower() or None
+        fallback_provider = (settings.provider or "openai").strip().lower() or "openai"
+
+        if effective_provider == "codex":
+            codex_cmd = str(getattr(settings, "codex_command", "") or "codex").strip() or "codex"
+            if shutil.which(codex_cmd) is None:
+                effective_provider = fallback_provider if fallback_provider != "codex" else "openai"
+        elif effective_provider == "claude":
+            claude_cmd = str(getattr(settings, "claude_command", "") or "claude").strip() or "claude"
+            if shutil.which(claude_cmd) is None:
+                effective_provider = fallback_provider if fallback_provider != "claude" else "openai"
+        elif effective_provider == "nanobot":
+            nanobot_cmd = str(getattr(settings, "nanobot_command", "") or "nanobot").strip() or "nanobot"
+            if shutil.which(nanobot_cmd) is None:
+                effective_provider = fallback_provider if fallback_provider != "nanobot" else "openai"
+        elif effective_provider == "opencode":
+            base = str(getattr(settings, "opencode_base_url", "") or "").strip().rstrip("/")
+            reachable = False
+            if base:
+                probe_urls = [f"{base}/health", f"{base}/status", base]
+                try:
+                    async with httpx.AsyncClient(timeout=1.2) as client:
+                        for url in probe_urls:
+                            try:
+                                resp = await client.get(url)
+                                if resp.status_code < 500:
+                                    reachable = True
+                                    break
+                            except Exception:
+                                continue
+                except Exception:
+                    reachable = False
+            if not reachable:
+                effective_provider = fallback_provider if fallback_provider != "opencode" else "openai"
+        elif effective_provider == "openclaw":
+            if not bool(getattr(settings, "openclaw_enabled", True)):
+                effective_provider = fallback_provider if fallback_provider != "openclaw" else "openai"
+            else:
+                openclaw_cmd_raw = str(getattr(settings, "openclaw_command", "") or "").strip()
+                try:
+                    openclaw_cmd = shlex.split(openclaw_cmd_raw)[0] if openclaw_cmd_raw else "openclaw"
+                except Exception:
+                    openclaw_cmd = "openclaw"
+                if "/" in openclaw_cmd or "\\" in openclaw_cmd:
+                    available = Path(openclaw_cmd).expanduser().exists()
+                else:
+                    available = shutil.which(openclaw_cmd) is not None
+                if not available:
+                    effective_provider = fallback_provider if fallback_provider != "openclaw" else "openai"
+
         result = await service.chat(
             message=req.message,
             session_id=req.session_id,
             role=req.role,
             user_id=user.id,
             team_id=user.team_id,
-            provider=req.provider,
+            provider=effective_provider,
             model=req.model,
             workspace_root=workspace_root,
             security_preset=req.security_preset,
@@ -332,7 +399,7 @@ async def chat(
             now = utc_now_iso()
             sid = str(result.get("session_id") or "").strip()
             if sid:
-                provider_name = (req.provider or settings.provider or "openai").strip().lower()
+                provider_name = (effective_provider or settings.provider or "openai").strip().lower()
                 model_name = (req.model or settings.model or "").strip()
                 project_id = int(req.project_id) if req.project_id is not None and int(req.project_id) > 0 else None
 
@@ -382,6 +449,42 @@ async def chat(
                         user.id,
                     ),
                 )
+                openclaw_session_id = str(result.get("openclaw_session_id") or "").strip()
+                if provider_name == "openclaw" and openclaw_session_id:
+                    await db.execute(
+                        """
+                        INSERT OR IGNORE INTO openclaw_sessions(
+                          team_id, user_id, chat_session_id, openclaw_session_id, status, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            user.team_id,
+                            user.id,
+                            sid,
+                            openclaw_session_id,
+                            "active",
+                            now,
+                            now,
+                        ),
+                    )
+                    await db.execute(
+                        """
+                        UPDATE openclaw_sessions
+                        SET user_id = ?,
+                            openclaw_session_id = ?,
+                            status = ?,
+                            updated_at = ?
+                        WHERE team_id = ? AND chat_session_id = ?
+                        """,
+                        (
+                            user.id,
+                            openclaw_session_id,
+                            "active",
+                            now,
+                            user.team_id,
+                            sid,
+                        ),
+                    )
 
                 user_attachments = req.attachments or []
                 await db.execute(

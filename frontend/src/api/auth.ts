@@ -19,6 +19,7 @@ export type MeResponse = {
   user: { id: number; email: string; name: string }
   teams: Array<{ id: number; name: string; role: string }>
   active_team: { id: number; name: string; role: string }
+  is_super_admin?: boolean
 }
 
 export async function authStatus(): Promise<AuthStatusResponse> {

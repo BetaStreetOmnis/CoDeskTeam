@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from ..db import fetchall, fetchone, row_to_dict, rows_to_dicts, utc_now_iso
 from ..deps import CurrentUser, get_current_user, get_db, get_settings, require_team_admin
-from ..project_utils import resolve_project_path, resolve_user_workspace_root, slugify
+from ..project_utils import path_under_any_root, resolve_project_path, resolve_user_workspace_root, slugify
 
 
 router = APIRouter(tags=["team"])
@@ -216,6 +216,44 @@ def _normalized_path(raw: object) -> str:
         return str(Path(text).expanduser().resolve())
     except Exception:
         return text
+
+
+def _projects_roots(settings) -> list[Path]:  # noqa: ANN001
+    roots = list(getattr(settings, "projects_roots", []) or [])
+    if not roots:
+        roots = [settings.workspace_root]
+    return [Path(r).expanduser().resolve() for r in roots]
+
+
+def _resolve_team_project_path(settings, user: CurrentUser, raw_path: str, *, auto_create: bool) -> Path:  # noqa: ANN001
+    raw = str(raw_path or "").strip()
+    if not raw:
+        raise ValueError("path 不能为空")
+
+    roots = _projects_roots(settings)
+    normalized = raw.replace("\\", "/").strip("/")
+    is_name_only = ("/" not in normalized) and (not Path(raw).expanduser().is_absolute())
+
+    if is_name_only:
+        user_segment = slugify(user.name or "", f"user-{int(user.id)}")
+        project_segment = slugify(raw, "project")
+        candidate = (roots[0] / user_segment / project_segment).resolve()
+    else:
+        p = Path(raw).expanduser()
+        if not p.is_absolute():
+            p = roots[0] / p
+        candidate = p.resolve()
+
+    if not path_under_any_root(candidate, roots):
+        raise ValueError(f"项目路径不在允许范围（JETLINKS_AI_PROJECTS_ROOT）：{candidate}")
+
+    if auto_create and not candidate.exists():
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            raise ValueError(f"无法创建项目路径：{candidate}") from None
+
+    return resolve_project_path(settings, str(candidate))
 
 
 def _detect_project_marker(path: Path) -> str | None:
@@ -645,7 +683,7 @@ async def create_team_project(
 
     now = utc_now_iso()
     try:
-        resolved = resolve_project_path(settings, req.path)
+        resolved = _resolve_team_project_path(settings, user, req.path, auto_create=True)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -715,7 +753,7 @@ async def import_team_projects(
             continue
 
         try:
-            resolved = resolve_project_path(settings, source_path)
+            resolved = _resolve_team_project_path(settings, user, source_path, auto_create=True)
         except ValueError as e:
             skipped.append(TeamProjectImportSkipped(path=source_path, reason=str(e)))
             continue
@@ -805,7 +843,7 @@ async def update_team_project(
         values.append(slugify(req.slug, str(existing.get("slug") or "project"))[:60])
     if req.path is not None:
         try:
-            resolved = resolve_project_path(settings, req.path)
+            resolved = _resolve_team_project_path(settings, user, req.path, auto_create=True)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         fields.append("path = ?")

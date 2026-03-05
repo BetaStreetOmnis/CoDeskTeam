@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ..db import fetchall, rows_to_dicts
-from ..deps import CurrentUser, get_current_user, get_db, get_settings
+from ..deps import CurrentUser, get_current_user, get_db, get_settings, is_super_user
 
 
 router = APIRouter(tags=["team"])
@@ -28,13 +28,21 @@ class TeamOverview(BaseModel):
     last_activity_at: str | None = None
 
 
+class TeamOverviewMember(BaseModel):
+    user_id: int
+    name: str
+    email: str
+    role: str
+    joined_at: str
+
+
 @router.get("/team/teams", response_model=list[TeamOverview])
 async def list_my_teams(
     user: CurrentUser = Depends(get_current_user),
     db=Depends(get_db),  # noqa: ANN001
     settings=Depends(get_settings),  # noqa: ANN001
 ) -> list[TeamOverview]:
-    is_super = str(user.email).strip().lower() in set(getattr(settings, "super_emails", set()) or set())
+    is_super = is_super_user(settings, str(user.email))
     if is_super:
         rows = await fetchall(
             db,
@@ -78,7 +86,7 @@ async def list_my_teams(
             SELECT
               t.id AS id,
               t.name AS name,
-              m.role AS role,
+              COALESCE(NULLIF(TRIM(m.role), ''), 'viewer') AS role,
               t.created_at AS created_at,
               COALESCE((SELECT COUNT(1) FROM memberships mm WHERE mm.team_id = t.id), 0) AS members,
               COALESCE((SELECT COUNT(1) FROM team_projects p WHERE p.team_id = t.id AND p.enabled = 1), 0) AS projects,
@@ -101,11 +109,36 @@ async def list_my_teams(
                   SELECT MAX(updated_at) AS x FROM team_settings ts2 WHERE ts2.team_id = t.id
                 ) v
               ) AS last_activity_at
-            FROM memberships m
-            JOIN teams t ON t.id = m.team_id
-            WHERE m.user_id = ?
+            FROM teams t
+            LEFT JOIN memberships m ON m.team_id = t.id AND m.user_id = ?
             ORDER BY t.id ASC
             """,
             (int(user.id),),
         )
     return [TeamOverview(**r) for r in rows_to_dicts(list(rows))]
+
+
+@router.get("/team/teams/{team_id}/members", response_model=list[TeamOverviewMember])
+async def list_team_members_by_team_id(
+    team_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    db=Depends(get_db),  # noqa: ANN001
+) -> list[TeamOverviewMember]:
+    _ = user
+    rows = await fetchall(
+        db,
+        """
+        SELECT
+          u.id AS user_id,
+          u.name AS name,
+          u.email AS email,
+          m.role AS role,
+          m.created_at AS joined_at
+        FROM memberships m
+        JOIN users u ON u.id = m.user_id
+        WHERE m.team_id = ?
+        ORDER BY m.created_at ASC, u.id ASC
+        """,
+        (int(team_id),),
+    )
+    return [TeamOverviewMember(**r) for r in rows_to_dicts(list(rows))]

@@ -5,7 +5,7 @@
             <div>
               <div class="modalTitle">项目/工作区管理</div>
               <div class="subtle">
-                路径需存在，且位于服务端 JETLINKS_AI_PROJECTS_ROOT 白名单内（默认等于 JETLINKS_AI_WORKSPACE）
+                支持直接填“项目名”（会自动建到 /用户名/项目名），也支持完整路径（需位于服务端 JETLINKS_AI_PROJECTS_ROOT 白名单内）
               </div>
             </div>
             <button class="ghostBtn" type="button" @click="showProjectModal = false">关闭</button>
@@ -89,7 +89,7 @@
                 v-model="teamProjectForm.path"
                 class="input"
                 :disabled="!canEditTeamProjects"
-                placeholder="/Users/.../your-repo"
+                placeholder="项目名（如 test01）或完整路径"
               />
             </div>
             <div class="row">
@@ -325,19 +325,22 @@
 	            </label>
 
 	            <div class="row compactRow wrapRow">
-	              <button class="ghostBtn iconBtn" type="button" @click="openAdminTeamsManager">
+	              <button v-if="isSuperAdmin()" class="ghostBtn iconBtn" type="button" @click="openAdminTeamsManager">
 	                <span class="msIcon btnIcon" aria-hidden="true">group</span>
 	                <span>团队管理</span>
 	              </button>
-	              <div v-if="me.teams.length <= 1" class="subtle">当前仅 1 个团队；可在此新建更多团队。</div>
+	              <div v-if="isSuperAdmin() && me.teams.length <= 1" class="subtle">当前仅 1 个团队；可在此新建更多团队。</div>
 	            </div>
 
 	            <label class="select wide">
 	              <span class="label">提供商</span>
 	              <select v-model="provider">
 	                <option v-if="availableProviders?.includes('openai')" value="openai">OpenAI</option>
+	                <option v-if="availableProviders?.includes('glm')" value="glm">GLM</option>
 	                <option v-if="availableProviders?.includes('pi')" value="pi">Pi（pi-mono）</option>
 	                <option v-if="availableProviders?.includes('codex')" value="codex">Codex CLI</option>
+	                <option v-if="availableProviders?.includes('claude')" value="claude">Claude Code</option>
+                <option v-if="availableProviders?.includes('openclaw')" value="openclaw">OpenClaw</option>
                 <option v-if="availableProviders?.includes('opencode')" value="opencode">OpenCode</option>
                 <option v-if="availableProviders?.includes('nanobot')" value="nanobot">NanoBot</option>
                 <option v-if="availableProviders?.includes('mock')" value="mock">模拟</option>
@@ -424,10 +427,17 @@
 	                  <div class="historyMetaRow">
 	                    <span class="metaPill">ID: {{ t.id }}</span>
 	                    <span class="metaPill">角色：{{ t.role }}</span>
-	                    <span class="metaPill">{{ me.active_team.id === t.id ? "当前" : "可切换" }}</span>
+	                    <span class="metaPill">{{ me.active_team.id === t.id ? "当前" : (t.role === "viewer" ? "仅查看" : "可切换") }}</span>
 	                    <span>成员：{{ t.members }}</span>
 	                    <span>项目：{{ t.projects }}</span>
 	                    <span>技能：{{ t.skills }}</span>
+	                  </div>
+	                  <div class="historyMetaRow">
+	                    <span>成员名单：</span>
+	                    <span v-if="teamMembersByTeamId[t.id] && teamMembersByTeamId[t.id].length">
+	                      {{ formatTeamMembersInline(t.id) }}
+	                    </span>
+	                    <span v-else class="subtle">暂无成员</span>
 	                  </div>
 	                  <div class="historyMetaRow">
 	                    <span>
@@ -443,8 +453,8 @@
 	                  </div>
 	                </div>
 	                <div class="historyActions">
-	                  <button class="ghostBtn" :disabled="me.active_team.id === t.id" type="button" @click="switchTeamFromCenter(t.id)">
-	                    {{ me.active_team.id === t.id ? "当前" : "切换" }}
+	                  <button class="ghostBtn" :disabled="me.active_team.id === t.id || t.role === 'viewer'" type="button" @click="switchTeamFromCenter(t.id)">
+	                    {{ me.active_team.id === t.id ? "当前" : (t.role === "viewer" ? "不可切换" : "切换") }}
 	                  </button>
 	                </div>
 	              </div>
@@ -513,9 +523,140 @@
 		                </div>
 		              </div>
 
-		              <div v-if="teamInvitesError" class="error">{{ teamInvitesError }}</div>
+		            <div v-if="teamInvitesError" class="error">{{ teamInvitesError }}</div>
 		            </template>
 		          </div>
+
+              <div class="divider"></div>
+
+              <div class="modalSection">
+                <div class="cardHead">
+                  <h3><span class="msIcon h3Icon" aria-hidden="true">hub</span>OpenClaw 运维</h3>
+                  <div class="subtle">状态探测 · 一键同步 · 渠道/插件管理</div>
+                </div>
+
+                <div v-if="!canManageOpenclaw()" class="subtle">需要 owner/admin 权限才能管理 OpenClaw。</div>
+                <template v-else>
+                  <div class="row compactRow wrapRow">
+                    <label class="chip" :class="{ disabled: openclawBusy }">
+                      <input v-model="openclawEditMode" type="checkbox" :disabled="openclawBusy" />
+                      <span>{{ openclawEditMode ? "编辑模式" : "只读模式" }}</span>
+                    </label>
+                    <button class="ghostBtn" :disabled="openclawBusy" type="button" @click="refreshOpenclawAll">刷新</button>
+                    <button class="primaryBtn" :disabled="openclawBusy || openclawSyncing" type="button" @click="syncOpenclawAll">
+                      {{ openclawSyncing ? "同步中…" : "一键同步" }}
+                    </button>
+                  </div>
+
+                  <div class="historyMetaRow">
+                    <span class="metaPill">启用：{{ openclawStatus?.enabled ? "是" : "否" }}</span>
+                    <span class="metaPill">CLI：{{ openclawStatus?.cli_available ? "可用" : "不可用" }}</span>
+                    <span class="metaPill">内嵌：{{ openclawStatus?.embedded ? "是" : "否" }}</span>
+                    <span class="metaPill">网关可达：{{ openclawStatus?.probe?.reachable ? "是" : "否" }}</span>
+                    <span class="metaPill">渠道 {{ openclawStatus?.channels_count ?? 0 }}</span>
+                    <span class="metaPill">插件 {{ openclawStatus?.plugins_count ?? 0 }}</span>
+                  </div>
+                  <div class="subtle mono pathLine">Gateway: {{ openclawStatus?.gateway_base_url || "—" }}</div>
+                  <div class="subtle mono pathLine">CLI: {{ openclawStatus?.cli_path || "—" }}</div>
+
+                  <div class="divider"></div>
+                  <div class="cardHead">
+                    <h3><span class="msIcon h3Icon" aria-hidden="true">alt_route</span>渠道管理</h3>
+                  </div>
+                  <div class="row compactRow wrapRow">
+                    <input v-model="newOpenclawChannelKey" class="input" :disabled="!openclawEditMode" placeholder="新渠道 key（如 telegram）" />
+                    <button class="ghostBtn" :disabled="openclawBusy || !openclawEditMode || !newOpenclawChannelKey.trim()" type="button" @click="createOpenclawChannel">
+                      新增渠道
+                    </button>
+                  </div>
+                  <div v-if="!openclawChannels.length" class="subtle">暂无渠道记录。</div>
+                  <div v-else class="historyList workspaceList">
+                    <div v-for="item in openclawChannels" :key="`oc-ch-${item.channel_key}`" class="historyItem workspaceListItem">
+                      <div class="historyItemMain workspaceListMain">
+                        <div class="historyTitle">{{ item.channel_key }}</div>
+                        <div class="row compactRow wrapRow">
+                          <input v-model="item.name" class="input" :disabled="!openclawEditMode" placeholder="名称" />
+                          <input v-model="item.channel_type" class="input" :disabled="!openclawEditMode" placeholder="类型" />
+                          <input v-model="item.external_id" class="input" :disabled="!openclawEditMode" placeholder="外部 ID（可选）" />
+                          <label class="chip" :class="{ disabled: !openclawEditMode }">
+                            <input v-model="item.enabled" type="checkbox" :disabled="!openclawEditMode" />
+                            <span>启用</span>
+                          </label>
+                        </div>
+                        <div class="row">
+                          <textarea
+                            v-model="item.metaText"
+                            class="input mono"
+                            :disabled="!openclawEditMode"
+                            rows="3"
+                            :style="channelMetaError(item) ? { borderColor: '#ef4444' } : undefined"
+                            placeholder='{"enabled":true}'
+                          />
+                        </div>
+                        <div v-if="channelMetaError(item)" class="error">meta_json 格式错误：{{ channelMetaError(item) }}</div>
+                      </div>
+                      <div class="historyActions">
+                        <button class="ghostBtn" :disabled="openclawBusy || !openclawEditMode || !!channelMetaError(item)" type="button" @click="saveOpenclawChannel(item)">保存</button>
+                        <button class="ghostBtn" :disabled="openclawBusy || !openclawEditMode" type="button" @click="deleteOpenclawChannel(item.channel_key)">
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="divider"></div>
+                  <div class="cardHead">
+                    <h3><span class="msIcon h3Icon" aria-hidden="true">extension</span>插件管理</h3>
+                  </div>
+                  <div class="row compactRow wrapRow">
+                    <input
+                      v-model="newOpenclawPluginKey"
+                      class="input"
+                      :disabled="!openclawEditMode"
+                      placeholder="新插件 key（如 @openclaw/msteams）"
+                    />
+                    <button class="ghostBtn" :disabled="openclawBusy || !openclawEditMode || !newOpenclawPluginKey.trim()" type="button" @click="createOpenclawPlugin">
+                      新增插件
+                    </button>
+                  </div>
+                  <div v-if="!openclawPlugins.length" class="subtle">暂无插件记录。</div>
+                  <div v-else class="historyList workspaceList">
+                    <div v-for="item in openclawPlugins" :key="`oc-pl-${item.plugin_key}`" class="historyItem workspaceListItem">
+                      <div class="historyItemMain workspaceListMain">
+                        <div class="historyTitle">{{ item.plugin_key }}</div>
+                        <div class="row compactRow wrapRow">
+                          <input v-model="item.name" class="input" :disabled="!openclawEditMode" placeholder="名称" />
+                          <input v-model="item.version" class="input" :disabled="!openclawEditMode" placeholder="版本" />
+                          <input v-model="item.source" class="input" :disabled="!openclawEditMode" placeholder="来源" />
+                          <label class="chip" :class="{ disabled: !openclawEditMode }">
+                            <input v-model="item.enabled" type="checkbox" :disabled="!openclawEditMode" />
+                            <span>启用</span>
+                          </label>
+                        </div>
+                        <div class="row">
+                          <textarea
+                            v-model="item.metaText"
+                            class="input mono"
+                            :disabled="!openclawEditMode"
+                            rows="3"
+                            :style="pluginMetaError(item) ? { borderColor: '#ef4444' } : undefined"
+                            placeholder='{"installed":true}'
+                          />
+                        </div>
+                        <div v-if="pluginMetaError(item)" class="error">meta_json 格式错误：{{ pluginMetaError(item) }}</div>
+                      </div>
+                      <div class="historyActions">
+                        <button class="ghostBtn" :disabled="openclawBusy || !openclawEditMode || !!pluginMetaError(item)" type="button" @click="saveOpenclawPlugin(item)">保存</button>
+                        <button class="ghostBtn" :disabled="openclawBusy || !openclawEditMode" type="button" @click="deleteOpenclawPlugin(item.plugin_key)">
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="openclawError" class="error">{{ openclawError }}</div>
+                </template>
+              </div>
 		        </div>
 		      </div>
 
@@ -617,6 +758,13 @@
 			      workspace_path: string | null
 			      last_activity_at: string | null
 			    }
+			    type TeamOverviewMember = {
+			      user_id: number
+			      name: string
+			      email: string
+			      role: string
+			      joined_at: string
+			    }
 			    type TeamInvite = {
 			      id: number
 			      team_id: number
@@ -630,6 +778,45 @@
 			      used_by: number | null
 			    }
 			    type AdminTeam = { id: number; name: string; created_at: string; members: number }
+          type OpenClawStatus = {
+            enabled: boolean
+            embedded: boolean
+            cli_available: boolean
+            cli_path?: string | null
+            gateway_base_url: string
+            gateway_port: number
+            gateway_bind: string
+            workdir: string
+            probe?: { reachable?: boolean }
+            channels_count?: number
+            plugins_count?: number
+          }
+          type OpenClawChannel = {
+            id: number
+            team_id: number
+            channel_key: string
+            channel_type: string
+            external_id: string
+            name: string
+            enabled: boolean
+            meta_json: Record<string, any>
+            created_at: string
+            updated_at: string
+          }
+          type OpenClawPlugin = {
+            id: number
+            team_id: number
+            plugin_key: string
+            name: string
+            version: string
+            source: string
+            enabled: boolean
+            meta_json: Record<string, any>
+            created_at: string
+            updated_at: string
+          }
+          type OpenClawChannelDraft = OpenClawChannel & { metaText: string }
+          type OpenClawPluginDraft = OpenClawPlugin & { metaText: string }
 
 			    const showAdminTeamsModal = ref(false)
 			    const adminTeamsBusy = ref(false)
@@ -641,6 +828,7 @@
 			    const teamOverviewBusy = ref(false)
 			    const teamOverviewError = ref<string | null>(null)
 			    const teamOverviews = ref<TeamOverview[]>([])
+			    const teamMembersByTeamId = ref<Record<number, TeamOverviewMember[]>>({})
 
 			    const teamInvitesBusy = ref(false)
 			    const teamInvitesError = ref<string | null>(null)
@@ -648,6 +836,236 @@
 			    const inviteEmailDraft = ref("")
 			    const inviteRoleDraft = ref<"member" | "admin">("member")
 			    const inviteExpiresDaysDraft = ref<number>(7)
+          const openclawBusy = ref(false)
+          const openclawSyncing = ref(false)
+          const openclawEditMode = ref(false)
+          const openclawError = ref<string | null>(null)
+          const openclawStatus = ref<OpenClawStatus | null>(null)
+          const openclawChannels = ref<OpenClawChannelDraft[]>([])
+          const openclawPlugins = ref<OpenClawPluginDraft[]>([])
+          const newOpenclawChannelKey = ref("")
+          const newOpenclawPluginKey = ref("")
+
+          function canManageOpenclaw(): boolean {
+            try {
+              return Boolean(props.ctx?.canEditTeamSkills?.value)
+            } catch {
+              return false
+            }
+          }
+
+          function parseMetaText(value: string): Record<string, any> {
+            const text = String(value || "").trim()
+            if (!text) return {}
+            try {
+              const obj = JSON.parse(text)
+              return obj && typeof obj === "object" && !Array.isArray(obj) ? obj : {}
+            } catch {
+              throw new Error("meta_json 必须是合法 JSON 对象")
+            }
+          }
+
+          function metaTextError(value: string): string | null {
+            const text = String(value || "").trim()
+            if (!text) return null
+            try {
+              const obj = JSON.parse(text)
+              if (!obj || typeof obj !== "object" || Array.isArray(obj)) return "需要 JSON 对象（{}）"
+              return null
+            } catch (e: any) {
+              return String(e?.message || "JSON 解析失败")
+            }
+          }
+
+          function channelMetaError(item: OpenClawChannelDraft): string | null {
+            return metaTextError(item.metaText)
+          }
+
+          function pluginMetaError(item: OpenClawPluginDraft): string | null {
+            return metaTextError(item.metaText)
+          }
+
+          function toChannelDraft(item: OpenClawChannel): OpenClawChannelDraft {
+            return {
+              ...item,
+              meta_json: item.meta_json || {},
+              metaText: JSON.stringify(item.meta_json || {}, null, 2),
+            }
+          }
+
+          function toPluginDraft(item: OpenClawPlugin): OpenClawPluginDraft {
+            return {
+              ...item,
+              meta_json: item.meta_json || {},
+              metaText: JSON.stringify(item.meta_json || {}, null, 2),
+            }
+          }
+
+          async function refreshOpenclawStatus() {
+            if (!canManageOpenclaw()) return
+            const res = await axios.get("/api/team/openclaw/status")
+            openclawStatus.value = (res.data || null) as OpenClawStatus | null
+          }
+
+          async function refreshOpenclawChannels() {
+            if (!canManageOpenclaw()) return
+            const res = await axios.get("/api/team/openclaw/channels")
+            const list = (res.data || []) as OpenClawChannel[]
+            openclawChannels.value = list.map(toChannelDraft)
+          }
+
+          async function refreshOpenclawPlugins() {
+            if (!canManageOpenclaw()) return
+            const res = await axios.get("/api/team/openclaw/plugins")
+            const list = (res.data || []) as OpenClawPlugin[]
+            openclawPlugins.value = list.map(toPluginDraft)
+          }
+
+          async function refreshOpenclawAll() {
+            if (!canManageOpenclaw()) return
+            openclawBusy.value = true
+            openclawError.value = null
+            try {
+              await Promise.all([refreshOpenclawStatus(), refreshOpenclawChannels(), refreshOpenclawPlugins()])
+            } catch (e: any) {
+              openclawError.value = typeof props.ctx.formatAxiosError === "function" ? props.ctx.formatAxiosError(e) : String(e)
+            } finally {
+              openclawBusy.value = false
+            }
+          }
+
+          async function syncOpenclawAll() {
+            if (!canManageOpenclaw()) return
+            openclawSyncing.value = true
+            openclawError.value = null
+            try {
+              await axios.post("/api/team/openclaw/sync")
+              await refreshOpenclawAll()
+              if (typeof props.ctx.showToast === "function") props.ctx.showToast("OpenClaw 已同步")
+            } catch (e: any) {
+              openclawError.value = typeof props.ctx.formatAxiosError === "function" ? props.ctx.formatAxiosError(e) : String(e)
+            } finally {
+              openclawSyncing.value = false
+            }
+          }
+
+          async function saveOpenclawChannel(item: OpenClawChannelDraft) {
+            if (!canManageOpenclaw()) return
+            openclawBusy.value = true
+            openclawError.value = null
+            try {
+              const meta = parseMetaText(item.metaText)
+              await axios.put(`/api/team/openclaw/channels/${encodeURIComponent(item.channel_key)}`, {
+                channel_type: item.channel_type || "",
+                external_id: item.external_id || "",
+                name: item.name || item.channel_key,
+                enabled: !!item.enabled,
+                meta_json: meta,
+              })
+              await refreshOpenclawChannels()
+              if (typeof props.ctx.showToast === "function") props.ctx.showToast(`渠道已保存：${item.channel_key}`)
+            } catch (e: any) {
+              openclawError.value = typeof props.ctx.formatAxiosError === "function" ? props.ctx.formatAxiosError(e) : String(e)
+            } finally {
+              openclawBusy.value = false
+            }
+          }
+
+          async function deleteOpenclawChannel(channelKey: string) {
+            if (!canManageOpenclaw()) return
+            openclawBusy.value = true
+            openclawError.value = null
+            try {
+              await axios.delete(`/api/team/openclaw/channels/${encodeURIComponent(channelKey)}`)
+              await refreshOpenclawChannels()
+              if (typeof props.ctx.showToast === "function") props.ctx.showToast(`渠道已删除：${channelKey}`)
+            } catch (e: any) {
+              openclawError.value = typeof props.ctx.formatAxiosError === "function" ? props.ctx.formatAxiosError(e) : String(e)
+            } finally {
+              openclawBusy.value = false
+            }
+          }
+
+          async function createOpenclawChannel() {
+            const key = String(newOpenclawChannelKey.value || "").trim()
+            if (!key) return
+            openclawBusy.value = true
+            openclawError.value = null
+            try {
+              await axios.put(`/api/team/openclaw/channels/${encodeURIComponent(key)}`, {
+                channel_type: key,
+                external_id: "",
+                name: key,
+                enabled: true,
+                meta_json: {},
+              })
+              newOpenclawChannelKey.value = ""
+              await refreshOpenclawChannels()
+            } catch (e: any) {
+              openclawError.value = typeof props.ctx.formatAxiosError === "function" ? props.ctx.formatAxiosError(e) : String(e)
+            } finally {
+              openclawBusy.value = false
+            }
+          }
+
+          async function saveOpenclawPlugin(item: OpenClawPluginDraft) {
+            if (!canManageOpenclaw()) return
+            openclawBusy.value = true
+            openclawError.value = null
+            try {
+              const meta = parseMetaText(item.metaText)
+              await axios.put(`/api/team/openclaw/plugins/${encodeURIComponent(item.plugin_key)}`, {
+                name: item.name || item.plugin_key,
+                version: item.version || "",
+                source: item.source || "",
+                enabled: !!item.enabled,
+                meta_json: meta,
+              })
+              await refreshOpenclawPlugins()
+              if (typeof props.ctx.showToast === "function") props.ctx.showToast(`插件已保存：${item.plugin_key}`)
+            } catch (e: any) {
+              openclawError.value = typeof props.ctx.formatAxiosError === "function" ? props.ctx.formatAxiosError(e) : String(e)
+            } finally {
+              openclawBusy.value = false
+            }
+          }
+
+          async function deleteOpenclawPlugin(pluginKey: string) {
+            if (!canManageOpenclaw()) return
+            openclawBusy.value = true
+            openclawError.value = null
+            try {
+              await axios.delete(`/api/team/openclaw/plugins/${encodeURIComponent(pluginKey)}`)
+              await refreshOpenclawPlugins()
+              if (typeof props.ctx.showToast === "function") props.ctx.showToast(`插件已删除：${pluginKey}`)
+            } catch (e: any) {
+              openclawError.value = typeof props.ctx.formatAxiosError === "function" ? props.ctx.formatAxiosError(e) : String(e)
+            } finally {
+              openclawBusy.value = false
+            }
+          }
+
+          async function createOpenclawPlugin() {
+            const key = String(newOpenclawPluginKey.value || "").trim()
+            if (!key) return
+            openclawBusy.value = true
+            openclawError.value = null
+            try {
+              await axios.put(`/api/team/openclaw/plugins/${encodeURIComponent(key)}`, {
+                name: key,
+                version: "",
+                source: "",
+                enabled: true,
+                meta_json: {},
+              })
+              newOpenclawPluginKey.value = ""
+              await refreshOpenclawPlugins()
+            } catch (e: any) {
+              openclawError.value = typeof props.ctx.formatAxiosError === "function" ? props.ctx.formatAxiosError(e) : String(e)
+            } finally {
+              openclawBusy.value = false
+            }
+          }
 
 			    async function refreshMe() {
 			      try {
@@ -667,6 +1085,14 @@
 			        return false
 			      }
 			    }
+
+          function isSuperAdmin(): boolean {
+            try {
+              return Boolean(props.ctx?.me?.value?.is_super_admin)
+            } catch {
+              return false
+            }
+          }
 
 			    async function refreshTeamInvites() {
 			      if (!canManageInvites()) return
@@ -736,13 +1162,34 @@
 			      try {
 		        const res = await axios.get("/api/team/teams")
 		        teamOverviews.value = (res.data || []) as TeamOverview[]
+		        const list = teamOverviews.value
+		        const pairs = await Promise.all(
+		          list.map(async (team) => {
+		            try {
+		              const memRes = await axios.get(`/api/team/teams/${team.id}/members`)
+		              return [team.id, (memRes.data || []) as TeamOverviewMember[]] as const
+		            } catch {
+		              return [team.id, [] as TeamOverviewMember[]] as const
+		            }
+		          }),
+		        )
+		        const nextMap: Record<number, TeamOverviewMember[]> = {}
+		        for (const [teamId, members] of pairs) nextMap[teamId] = members
+		        teamMembersByTeamId.value = nextMap
 		      } catch (e: any) {
 		        teamOverviewError.value = typeof props.ctx.formatAxiosError === "function" ? props.ctx.formatAxiosError(e) : String(e)
 		        teamOverviews.value = []
+		        teamMembersByTeamId.value = {}
 		      } finally {
 		        teamOverviewBusy.value = false
 		      }
 		    }
+
+			    function formatTeamMembersInline(teamId: number): string {
+			      const members = teamMembersByTeamId.value[teamId] || []
+			      if (!members.length) return ""
+			      return members.map((member: TeamOverviewMember) => `${member.name}（${member.role}）`).join("、")
+			    }
 
 			    function closeTeamCenter() {
 			      props.ctx.showTeamCenter.value = false
@@ -782,6 +1229,10 @@
 	    }
 
 	    async function openAdminTeamsManager() {
+	      if (!isSuperAdmin()) {
+          if (typeof props.ctx.showToast === "function") props.ctx.showToast("需要超级管理员权限")
+          return
+        }
 	      showAdminTeamsModal.value = true
 	      props.ctx.showTopMenu.value = false
 	      await refreshAdminTeams()
@@ -841,6 +1292,7 @@
 			        if (open) {
 			          refreshTeamOverviews()
 			          refreshTeamInvites()
+                refreshOpenclawAll()
 			        }
 			      },
 			    )
@@ -851,6 +1303,7 @@
 		      teamOverviewBusy,
 			      teamOverviewError,
 			      teamOverviews,
+			      teamMembersByTeamId,
 			      teamInvitesBusy,
 			      teamInvitesError,
 			      teamInvites,
@@ -858,11 +1311,13 @@
 			      inviteRoleDraft,
 			      inviteExpiresDaysDraft,
 			      refreshTeamOverviews,
+			      formatTeamMembersInline,
 			      refreshTeamInvites,
-			      createTeamInvite,
+          createTeamInvite,
 			      deleteTeamInvite,
 			      closeTeamCenter,
 			      switchTeamFromCenter,
+            isSuperAdmin,
 			      showAdminTeamsModal,
 		      adminTeamsBusy,
 		      adminTeamsError,
@@ -875,6 +1330,26 @@
 	      createAdminTeam,
 	      renameAdminTeam,
 	      switchToTeam,
+          canManageOpenclaw,
+          openclawBusy,
+          openclawSyncing,
+          openclawEditMode,
+          openclawError,
+          openclawStatus,
+          openclawChannels,
+          openclawPlugins,
+          newOpenclawChannelKey,
+          newOpenclawPluginKey,
+          refreshOpenclawAll,
+          syncOpenclawAll,
+          saveOpenclawChannel,
+          deleteOpenclawChannel,
+          createOpenclawChannel,
+          saveOpenclawPlugin,
+          deleteOpenclawPlugin,
+          createOpenclawPlugin,
+          channelMetaError,
+          pluginMetaError,
 	    } as any
 	  },
 	})

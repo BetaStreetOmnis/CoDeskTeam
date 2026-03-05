@@ -14,6 +14,7 @@ from .config import Settings
 from .db import init_db
 from .env_utils import env_str
 from .output_cleanup import cleanup_outputs_dir
+from .services.openclaw_runtime import get_openclaw_runtime
 from .routers import (
     admin_teams,
     auth,
@@ -31,6 +32,7 @@ from .routers import (
     skills,
     team,
     team_integrations,
+    team_openclaw,
     wecom,
 )
 
@@ -39,8 +41,13 @@ def create_app(settings: Settings) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN001
         await init_db(settings)
+        openclaw_runtime = get_openclaw_runtime(settings)
+        await openclaw_runtime.start()
         cleanup_outputs_dir(settings.outputs_dir, ttl_seconds=max(0, int(settings.outputs_ttl_hours)) * 3600)
-        yield
+        try:
+            yield
+        finally:
+            await openclaw_runtime.stop()
 
     app = FastAPI(title="JetLinks AI API", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
@@ -63,6 +70,7 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(auth.router, prefix="/api")
     app.include_router(team.router, prefix="/api")
     app.include_router(team_integrations.router, prefix="/api")
+    app.include_router(team_openclaw.router, prefix="/api")
     app.include_router(wecom.router, prefix="/api")
     app.include_router(feishu.router, prefix="/api")
     app.include_router(history.router, prefix="/api")

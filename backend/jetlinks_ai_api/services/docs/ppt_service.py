@@ -311,7 +311,7 @@ class PptDocService:
 
         def _effective_template_mode() -> str:
             raw = str(template_mode or env_str("PPT_TEMPLATE_MODE", "") or "").strip().lower()
-            return raw or "reuse"
+            return raw or "inplace"
 
         def _build_result(path: Path) -> dict:
             file_id = path.name
@@ -368,7 +368,7 @@ class PptDocService:
                 return ""
             text_value = bullet_prefix_re.sub("", text_value).strip()
             # Keep bullets compact so the template/programmatic layouts don't look crowded.
-            return _normalize_text(text_value, max_chars=56)
+            return _normalize_text(text_value, max_chars=36)
 
         def _cover_title_lines(value: str) -> list[str]:
             text_value = _normalize_text(value, max_chars=52, fallback="演示文稿")
@@ -448,8 +448,8 @@ class PptDocService:
             raw_bullets = source.get("bullets") or []
             normalized_bullets = [_normalize_bullet(item) for item in raw_bullets]
             cleaned_bullets = [item for item in normalized_bullets if item]
-            if len(cleaned_bullets) > 8:
-                cleaned_bullets = [*cleaned_bullets[:7], "其余细节可在讲解时展开说明。"]
+            if len(cleaned_bullets) > 6:
+                cleaned_bullets = [*cleaned_bullets[:5], "其余细节可在讲解时展开说明。"]
             if not cleaned_bullets:
                 cleaned_bullets = ["结合业务现状补充关键结论与下一步行动。"]
             normalized_slides.append({"title": slide_title, "bullets": cleaned_bullets})
