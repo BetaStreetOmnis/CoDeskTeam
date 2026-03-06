@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field

@@ -3,8 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
-import re
 import secrets
 from pathlib import Path
 
@@ -12,6 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..agent.types import ChatMessage
+from ..chat_payload_utils import (
+    infer_attachment_kind as _infer_kind,
+    safe_load_attachments as _safe_load_attachments,
+    safe_outputs_path as _safe_outputs_path,
+)
 from ..db import fetchall, fetchone, row_to_dict, rows_to_dicts, utc_now_iso
 from ..deps import get_db, get_settings
 from ..project_utils import resolve_project_path, resolve_user_workspace_root
@@ -23,8 +26,6 @@ from ..session_store import get_session_store
 
 
 router = APIRouter(tags=["integrations"])
-
-_FILE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
 
 
 def _extract_integration_token(request: Request) -> str | None:
@@ -52,55 +53,6 @@ def _openclaw_session_id(*, team_id: int, thread_id: str, external_user_id: str)
     raw = f"openclaw:{int(team_id)}:{base}".encode("utf-8", errors="ignore")
     digest = hashlib.sha1(raw).hexdigest()  # noqa: S324 - non-crypto use (stable id)
     return f"oc-{int(team_id)}-{digest[:24]}"
-
-
-def _safe_outputs_path(outputs_dir: Path, file_id: str) -> Path:
-    file_id = (file_id or "").strip()
-    if not file_id:
-        raise ValueError("invalid file_id")
-    if not _FILE_ID_RE.match(file_id) or ".." in file_id:
-        raise ValueError("invalid file_id")
-
-    base = outputs_dir.resolve()
-    full = (base / file_id).resolve()
-    if full == base or not str(full).startswith(str(base) + os.sep):
-        raise ValueError("invalid file_id")
-    return full
-
-
-def _truncate_title(text: str, max_len: int = 48) -> str:
-    t = (text or "").strip().replace("\n", " ").replace("\r", " ")
-    t = " ".join(t.split())
-    if len(t) <= max_len:
-        return t
-    return t[: max(0, max_len - 1)] + "…"
-
-
-def _infer_kind(att: dict) -> str:
-    kind = str(att.get("kind") or att.get("type") or "").strip().lower()
-    if kind in {"image", "file"}:
-        return kind
-    ctype = str(att.get("content_type") or "").strip().lower()
-    if ctype.startswith("image/"):
-        return "image"
-    fid = str(att.get("file_id") or "").lower()
-    if fid.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
-        return "image"
-    return "file"
-
-
-def _safe_load_attachments(value: object) -> list[dict]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [x for x in value if isinstance(x, dict)]
-    if isinstance(value, str):
-        try:
-            data = json.loads(value)
-        except Exception:
-            return []
-        return [x for x in data if isinstance(x, dict)] if isinstance(data, list) else []
-    return []
 
 
 def _extract_tool_files(events: list[dict]) -> list[dict]:

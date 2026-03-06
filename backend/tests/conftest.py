@@ -6,12 +6,17 @@ from typing import Iterator
 from urllib.parse import urlparse
 import os
 import subprocess
+import sys
 import time
 import uuid
 
 import pytest
 
-from jetlinks_ai_api.env_utils import env_str
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
+
+from jetlinks_ai_api.env_utils import env_str  # noqa: E402
 
 
 def _is_local_host(host: str) -> bool:

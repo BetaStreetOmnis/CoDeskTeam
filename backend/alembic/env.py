@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 from pathlib import Path
-import os
 
 from alembic import context
 from sqlalchemy import create_engine

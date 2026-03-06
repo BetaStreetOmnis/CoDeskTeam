@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse

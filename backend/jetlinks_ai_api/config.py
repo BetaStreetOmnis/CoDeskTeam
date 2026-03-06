@@ -158,7 +158,6 @@ def load_settings() -> Settings:
                 shared_invite_token = secrets.token_urlsafe(24)
                 token_path.write_text(shared_invite_token, encoding="utf-8")
                 print(f"[jetlinks-ai] 已生成通用邀请码（内部使用）并写入：{token_path}")
-                print(f"[jetlinks-ai] 通用邀请码：{shared_invite_token}")
 
     cors_origins = [
         origin.strip()
