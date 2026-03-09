@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "JetLinks AI（本地 Agent + 可选 Gateway）",
+  "description": "JetLinks AI — enterprise OpenClaw workspace for team delivery",
   "bin": {
     "jetlinks-ai": "dist/cli.js"
   },

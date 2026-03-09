@@ -1,7 +1,7 @@
 [project]
 name = "jetlinks-ai-api"
 version = "0.1.0"
-description = "JetLinks AI - FastAPI 后端"
+description = "JetLinks AI - enterprise OpenClaw workspace backend"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

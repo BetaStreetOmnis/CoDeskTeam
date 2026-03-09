@@ -1,19 +1,42 @@
-# JetLinks AI
+# JetLinks AI · Enterprise OpenClaw Workspace
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-JetLinks AI is an open-source, self-hosted **AI workspace for small teams and OPCs (one-person companies)**.
-You can think of it as a **team-oriented OpenClaw**: chat-driven execution plus team governance, a shared workspace, and deliverable automation.
+JetLinks AI is an open-source, self-hosted **AI delivery workspace for teams**.
+You can think of it as an **enterprise-ready OpenClaw workspace**: chat-driven execution, shared team context, project / requirement management, deliverable automation, and OpenClaw operations in one product.
+
+> From idea to execution to deliverables — chat, projects, docs, prototypes, and OpenClaw ops in one place.
 
 > Acknowledgements: JetLinks AI includes optional integration points inspired by the OpenClaw gateway. Thanks to the OpenClaw project and community.
 
-- Frontend: Vue 3 + Vite
-- Backend: FastAPI (auth, multi-team isolation, agent orchestration, file & doc services)
-- Built-in: chat + history, uploads/downloads, document generation (PPT/quotation/inspection), prototype generation, Feishu/WeCom webhooks
-- Optional: OpenClaw gateway ingress for multi-channel messaging
-- Secure-by-default: high-risk tools (`shell/write/browser`) are **disabled by default** and must be explicitly enabled
+## Why teams like it
 
-## Screenshot
+- **More than chat**: combine AI chat, team skills, requirement tracking, and project coordination in one workspace
+- **Built for delivery**: generate PPTX, quotations, inspection sheets, prototypes, and posters without leaving the app
+- **OpenClaw-ready**: manage gateway status, channel/plugin/skill sync, and team-scoped OpenClaw resources
+- **Self-hosted and controllable**: FastAPI + Vue stack, SQLite/Postgres support, secure-by-default tool gating
+- **Enterprise-friendly UX**: multi-team collaboration, workspace isolation, admin controls, and mobile-friendly layouts
+
+## Highlights
+
+- **Team-first workspace**: users, teams, invites, role-based operations, project/workspace switching
+- **AI workbench**: chat, history, uploads/downloads, built-in skills, team prompt skills, shared context
+- **Deliverable generation**: PPTX, quotation, inspection sheet, HTML prototype, SVG poster / long image
+- **AI+ toolkit pipelines**: vision, media, content, office, and full-stack orchestration pipelines
+- **OpenClaw operations center**: status probe, one-click sync, channel/plugin/skill management, team-scoped skill registry
+- **Secure by default**: high-risk tools (`shell`, `write`, `browser`) are disabled unless explicitly enabled
+
+## Architecture
+
+- **Frontend**: Vue 3 + Vite
+- **Backend**: FastAPI
+- **Data**: SQLite by default, Postgres supported
+- **Artifacts**: generated files are stored in `outputs/` or the configured runtime directory
+- **Optional upstream integrations**: OpenClaw / OpenCode / Pi via vendored submodules
+
+## Preview
+
+![JetLinks AI · Enterprise OpenClaw Workspace](docs/images/github-hero.svg)
 
 ![JetLinks AI UI](docs/images/screenshot.png)
 
@@ -22,14 +45,14 @@ You can think of it as a **team-oriented OpenClaw**: chat-driven execution plus 
 ### Prerequisites
 
 - Node.js `>= 22` + `pnpm`
-- Python `>= 3.10` + `uv` (backend dependency manager)
+- Python `>= 3.10` + `uv`
 
 Optional:
 
-- LibreOffice (for PPT cover preview image generation; PPTX generation works without it)
-- Playwright (for browser tool; disabled by default)
+- LibreOffice (for PPT cover preview generation)
+- Playwright (for browser tool and UI smoke testing)
 
-### Run (recommended)
+### Run locally
 
 ```bash
 pnpm dev
@@ -42,6 +65,7 @@ Default URLs:
 - Web: `http://127.0.0.1:5173`
 - API: `http://127.0.0.1:8000`
 - Health: `http://127.0.0.1:8000/health`
+- Ready: `http://127.0.0.1:8000/ready`
 
 On first launch, complete the **Setup** flow in the UI to create the first admin user and team.
 
@@ -51,13 +75,56 @@ On first launch, complete the **Setup** flow in the UI to create the first admin
 cp .env.example .env
 ```
 
-Then set `OPENAI_API_KEY` in `.env` if you want chat/agent capabilities.
+If you want chat / agent capability, set at least:
 
-## Database (SQLite / Postgres)
+```bash
+OPENAI_API_KEY=your-key
+```
 
-- Default: SQLite (no extra setup)
+## Feature Map
+
+### Workspace and team collaboration
+
+- Multi-team user model with invites, memberships, and active-team switch
+- Team workspace settings and project / repository management
+- Team skills (prompt templates) and requirement board
+- Cross-team delivery workflow with accept / reject states
+
+### Built-in deliverables
+
+- **PPTX** generation with template-based rendering
+- **Quotation** generation in DOCX / XLSX
+- **Inspection sheet** generation in DOCX / XLSX
+- **Prototype** generation as HTML ZIP + preview
+- **Poster / long image** generation as SVG via `/api/docs/poster`
+
+### AI+ toolkit pipelines
+
+Built-in skill catalog now includes pipeline-style capabilities:
+
+- `vision`: image enhancement / conversion / resize-oriented flow
+- `media`: short video / audio handling flow
+- `content`: proposal, content-pack, and deliverable generation flow
+- `office`: project / office automation flow
+- `full`: combined end-to-end orchestration flow
+
+### OpenClaw integration and ops
+
+JetLinks AI now includes a team-facing OpenClaw operations area:
+
+- Gateway status probing and runtime visibility
+- One-click sync of discovered OpenClaw resources
+- Team-scoped **channels / plugins / skills** CRUD
+- Team-scoped OpenClaw skill discovery and counters
+- Config editing experience aligned closer to original OpenClaw channel metadata structure
+
+## Database
+
+- Default: SQLite (zero extra setup)
 - Production: Postgres via `JETLINKS_AI_DB_URL=postgresql://...`
-- Postgres migrations use Alembic:
+- If an old `.aistaff/aistaff.db` exists and `.jetlinks-ai/jetlinks_ai.db` does not, JetLinks AI auto-migrates runtime data into `.jetlinks-ai/` on first start.
+
+Run migrations for Postgres:
 
 ```bash
 cd backend
@@ -66,53 +133,19 @@ uv run alembic upgrade head
 
 More backend details: `backend/README.md`.
 
-## Features
+## Health and readiness
 
-- Multi-team: users, teams, memberships, invites, team switch
-- Team workspace: projects, skills (prompt templates), requirements board
-- Cross-team delivery: deliver a requirement to another team and let the target team accept/reject
-- Agent providers: OpenAI / Pi (pi-mono) / Codex / OpenCode / Nanobot (via env + UI selection)
-- Document generation:
-  - PPTX: styles + layout modes, and **template-based rendering** by uploading a `.pptx` and passing `template_file_id`
-  - Quotation: DOCX / XLSX
-  - Inspection: DOCX / XLSX
-- Prototype generator: produces an HTML ZIP + preview
-- File service: uploads + tokenized downloads
-
-## Cross-team requirement delivery
-
-The requirements board uses the existing `team_requirements` statuses (`incoming/todo/in_progress/done/blocked`). When creating a requirement, you can optionally attach structured `delivery` info to **deliver** it to another team:
-
-- Initiate delivery (source team `owner/admin`): create a requirement with `delivery.target_team_id`
-  - The requirement is created under the **target team** (`team_id=target_team_id`)
-  - Forced fields: `status=incoming`, `source_team=<source team name>`, `delivery_state=pending`
-- Accept / reject (target team `owner/admin`):
-  - Accept: `POST /api/team/requirements/{requirement_id}/accept` (`delivery_state=accepted`; if `status=incoming` it advances to `todo`)
-  - Reject: `POST /api/team/requirements/{requirement_id}/reject` (`delivery_state=rejected`; rejected deliveries are hidden from the default list)
-
-Note: delivery is currently **single-record mode** — the requirement exists only in the target team (no mirrored copy in the source team).
-
-## Central reference repository (Reference Repo)
-
-A common setup is to maintain a “central reference repo” (standards, templates, SDKs, examples) and let teams reference it as a selectable project/workspace:
-
-- Server allowlist: `JETLINKS_AI_PROJECTS_ROOT` defines which directories teams are allowed to add (defaults to `JETLINKS_AI_WORKSPACE`)
-- Team setup (team `owner/admin`): add the central repo path into `team_projects` via “Project/Workspace management” (or use “Quick import” to scan roots)
-- Chat routing:
-  - With `project_id`: the backend uses that project’s `path` as the chat `workspace_root` (tools like `fs_list/fs_read/...` run inside it)
-  - Without `project_id`: uses the team workspace (`/api/team/settings`) or falls back to `JETLINKS_AI_WORKSPACE`
-
-Recommendations:
-
-- “Share” the same repo by adding the same path to each team’s `team_projects` (this shares config, not copies files)
-- Keep it secret-free; in production prefer `JETLINKS_AI_ENABLE_WRITE=0` and treat it as read-only
+- `GET /health`: liveness check
+- `GET /ready`: readiness check with DB/runtime path information
+- `GET /api/ready`: API-scoped readiness endpoint
 
 ## API Example: Generate a quotation (XLSX / DOCX)
 
 Notes:
 
-- The quotation endpoints require auth: `Authorization: Bearer <access_token>`
-- `download_url` is usually a **relative path** (e.g. `/api/files/...`). If you set `JETLINKS_AI_PUBLIC_BASE_URL`, it becomes an absolute URL.
+- Quotation endpoints require auth: `Authorization: Bearer <access_token>`
+- `download_url` is usually relative (for example `/api/files/...`)
+- If `JETLINKS_AI_PUBLIC_BASE_URL` is configured, generated links become absolute URLs
 
 ### 1) Login and get a token
 
@@ -127,7 +160,7 @@ TOKEN=$(
 )
 ```
 
-### 2) Generate an XLSX quotation (recommended)
+### 2) Generate an XLSX quotation
 
 ```bash
 META=$(
@@ -163,17 +196,13 @@ esac
 curl -L "$FULL_URL" -o quote.xlsx
 ```
 
-### 4) Generate a DOCX quotation (optional)
-
-Use `/api/docs/quote` with the same request body.
-
 ## Integrations (optional)
 
 This repo vendors optional upstream projects as git submodules:
 
-- `third_party/openclaw`: Moltbot/Clawdbot (gateway + multi-channel messaging)
-- `third_party/opencode`: OpenCode (agent loop + approvals)
-- `third_party/pi-mono`: Pi (agent SDK + coding agent)
+- `third_party/openclaw`: OpenClaw gateway and multi-channel messaging
+- `third_party/opencode`: OpenCode agent loop and approval flow
+- `third_party/pi-mono`: Pi agent SDK / coding agent
 
 If you need them:
 
@@ -181,23 +210,19 @@ If you need them:
 git submodule update --init --recursive
 ```
 
-### Pi (pi-mono) provider
+### Pi provider
 
-- Enable: set `JETLINKS_AI_ENABLE_PI=1`, then select provider `pi` in the UI (or set `JETLINKS_AI_PROVIDER=pi`).
-- Requirements: Node.js `>= 20` (or Docker via `JETLINKS_AI_PI_BACKEND=docker`).
+- Enable: `JETLINKS_AI_ENABLE_PI=1`
+- Then select provider `pi` in the UI, or set `JETLINKS_AI_PROVIDER=pi`
+- Requirements: Node.js `>= 20` or Docker via `JETLINKS_AI_PI_BACKEND=docker`
 
-### OpenClaw (gateway webhook)
+### OpenClaw gateway webhook
 
-1. Create an integration token (team owner/admin):
-
+1. Create an integration token as team owner/admin:
    - `POST /api/team/integrations/openclaw`
-
-   2. Send messages from your gateway to JetLinks AI:
-
-       - `POST /api/integrations/openclaw/message`
-       - Header: `x-jetlinks-ai-integration-token: <token>` (legacy `x-aistaff-integration-token` is also accepted)
-
-For now this is a simple HTTP ingress API. You can build a Moltbot plugin/bridge on top of it.
+2. Send messages from your gateway:
+   - `POST /api/integrations/openclaw/message`
+   - Header: `x-jetlinks-ai-integration-token: <token>`
 
 ## Development
 
@@ -217,83 +242,50 @@ pnpm i
 pnpm dev
 ```
 
-## Production deployment (single host example)
+## Testing
 
-Goal: build the frontend and let the backend serve `frontend/dist` at `/` so users only access `http(s)://<your-domain>/`.
-
-### 1) Install prerequisites
-
-- Node.js `>= 22` + `pnpm`
-- Python `>= 3.10` + `uv`
-
-Optional (PPT/PDF preview images):
-
-- LibreOffice (`soffice`)
-- Poppler (`pdftoppm`)
-- CJK fonts (recommended: Noto Sans CJK / Source Han Sans) for better rendering in previews
-
-### 2) Configure `.env`
-
-Recommended:
-
-- `OPENAI_API_KEY=...`
-- `JETLINKS_AI_PUBLIC_BASE_URL=https://your-domain` (for absolute download links)
-- `JETLINKS_AI_DB_URL=postgresql://user:pass@host:5432/db` (production recommended)
-- (Optional) `JETLINKS_AI_PPT_FONT=Noto Sans CJK SC` (more consistent rendering on Linux)
-
-### 3) Backend deps + migrations
+Frontend build:
 
 ```bash
-cd backend
-uv sync
-uv run alembic upgrade head
-```
-
-### 4) Build frontend
-
-```bash
-pnpm -C frontend i
 pnpm -C frontend build
 ```
 
-### 5) Run backend
-
-```bash
-cd backend
-uv run uvicorn jetlinks_ai_api.main:app --host 0.0.0.0 --port 8000
-```
-
-Open:
-
-- UI: `http://<server>:8000/`
-- API: `http://<server>:8000/api/*`
-
-Tests (Postgres):
+Backend tests:
 
 ```bash
 cd backend
 uv run python -m pytest
 ```
 
-Notes:
+Useful smoke checks:
 
-- By default tests start a temporary Postgres via Docker.
-- To reuse an existing local Postgres, set `JETLINKS_AI_TEST_DB_URL=postgresql://...` before running pytest.
+```bash
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/ready
+```
 
-## Security
+## Production deployment
 
-Server-side feature flags gate high-risk tools:
+Goal: build the frontend and let the backend serve `frontend/dist` at `/` so users access a single host such as `https://your-domain/`.
 
-- `JETLINKS_AI_ENABLE_SHELL`
-- `JETLINKS_AI_ENABLE_WRITE`
-- `JETLINKS_AI_ENABLE_BROWSER`
+### 1) Install prerequisites
 
-Keep them off unless you trust the environment and users.
+- Node.js `>= 22` + `pnpm`
+- Python `>= 3.10` + `uv`
 
-Internal signup code (optional):
+Optional:
 
-- `JETLINKS_AI_SHARED_INVITE_TOKEN` enables a **multi-use** registration invite code. Do not expose it to the public internet.
+- LibreOffice (`soffice`)
+- Poppler (`pdftoppm`)
+- CJK fonts such as Noto Sans CJK / Source Han Sans
 
-## License
+### 2) Configure `.env`
 
-Apache-2.0. See `LICENSE`.
+Recommended:
+
+```bash
+OPENAI_API_KEY=...
+JETLINKS_AI_PUBLIC_BASE_URL=https://your-domain
+```
+
+More operational detail is available in `backend/README.md`.

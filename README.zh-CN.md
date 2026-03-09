@@ -1,19 +1,34 @@
-# JetLinks AI
+# JetLinks AI · 企业版 OpenClaw 工作台
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-JetLinks AI 是一个开源、可自托管的 **AI 工作台**，面向小团队与一人公司（OPC）。  
-你可以把它理解为 **“团队/企业版的 OpenClaw”**：以对话驱动任务执行，在团队治理与交付物自动化场景里开箱即用。
+JetLinks AI 是一个开源、可自托管的 **团队 AI 交付工作台**。  
+你可以把它理解为 **更适合企业和团队落地的 OpenClaw 工作台**：把对话式执行、共享上下文、需求/项目管理、交付物生成，以及 OpenClaw 运营能力整合到一个产品里。
+
+> 从“想法 / 需求”到“执行 / 交付”，把聊天、项目、文档、原型和 OpenClaw 运营统一到一个界面里。
 
 > 鸣谢：本项目在网关/多渠道接入思路上参考了 OpenClaw，并提供可选的 OpenClaw ingress 集成入口。  
 
-- 前端：Vue 3 + Vite（统一工作台、聊天、历史、项目/团队/需求管理）
-- 后端：FastAPI（鉴权、多团队隔离、Agent 编排、文件与文档服务）
-- 内置能力：对话与历史、文件上传/下载、文档生成（PPT/报价单/报检单）、原型生成、企业微信/飞书回调
-- 可选能力：对接 OpenClaw 网关实现多渠道消息接入（作为 ingress）
-- 安全默认：`shell/write/browser` 等高危工具默认关闭，需显式开启
+## 为什么更适合团队落地
 
-## 截图
+- **不只是聊天窗口**：把 AI 对话、团队技能、需求流转和项目协同放进同一个工作台
+- **天然面向交付**：可直接生成 PPT、报价单、报检单、原型和海报等结果物
+- **OpenClaw 更易运营**：内置网关状态、资源同步、频道/插件/技能管理与团队级资源视图
+- **自托管可控**：基于 FastAPI + Vue，支持 SQLite / Postgres，默认安全收敛
+- **企业体验更完整**：支持多团队、权限治理、工作区隔离，以及小屏/移动端适配
+
+## 核心亮点
+
+- **团队优先工作台**：用户、团队、邀请、角色权限、项目/工作区切换
+- **AI 工作台**：聊天、历史、上传下载、内置技能、团队 Prompt 技能、共享上下文
+- **交付物生成**：PPT、报价单、报检单、HTML 原型、SVG 海报/长图
+- **AI+ Pipeline**：视觉、媒体、内容、办公、全链路编排
+- **OpenClaw 运营中心**：状态探测、一键同步、频道/插件/技能管理、团队级技能注册表
+- **默认更安全**：`shell`、`write`、`browser` 等高风险工具需显式开启
+
+## 预览
+
+![JetLinks AI · 企业版 OpenClaw 工作台](docs/images/github-hero.svg)
 
 ![JetLinks AI 界面截图](docs/images/screenshot.png)
 
@@ -136,7 +151,7 @@ flowchart LR
 - 拉取子模块：`git submodule update --init --recursive`
 - OpenClaw 网关入口（HTTP）：
   1) 团队 `owner/admin` 生成 token：`POST /api/team/integrations/openclaw`
-  2) 网关发消息：`POST /api/integrations/openclaw/message`（Header: `x-jetlinks-ai-integration-token`；兼容 `x-aistaff-integration-token`）
+  2) 网关发消息：`POST /api/integrations/openclaw/message`（Header: `x-jetlinks-ai-integration-token`）
 
 ### 2.4 安全策略
 
@@ -567,6 +582,7 @@ sudo systemctl status codeskteam
 
 - `JETLINKS_AI_DATA_DIR=.jetlinks-ai`
 - `JETLINKS_AI_DB_PATH=.jetlinks-ai/jetlinks_ai.db`
+- 若检测到旧目录 `.aistaff/aistaff.db`，且新目录 `.jetlinks-ai/jetlinks_ai.db` 尚不存在，服务首次启动时会自动把运行数据迁移到 `.jetlinks-ai/`。
 - `JETLINKS_AI_OUTPUTS_DIR=.jetlinks-ai/outputs`
 - `JETLINKS_AI_OUTPUTS_TTL_HOURS=168`
 
