@@ -1,4 +1,4 @@
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 WORKDIR /app
 COPY frontend/package.json frontend/pnpm-lock.yaml* frontend/
 RUN corepack enable && corepack prepare pnpm@latest --activate && cd frontend && pnpm install --frozen-lockfile=false

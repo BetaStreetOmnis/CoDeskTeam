@@ -70,6 +70,17 @@ cp .env.example .env
 
 然后至少填写 `.env` 里的 `OPENAI_API_KEY`（如果你要使用对话/Agent 能力）。
 
+### 2.5) Docker 部署（自托管）
+
+仓库内置了一个开箱即用的 Docker Compose（默认单容器 + SQLite）：
+
+```bash
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+默认地址：`http://127.0.0.1:8001`（UI + API），健康检查：`http://127.0.0.1:8001/health`。  
+更多说明见：`docker/README.md`。
+
 ### 3) 数据库（SQLite / Postgres）
 
 - 默认使用 SQLite（无需额外配置）。

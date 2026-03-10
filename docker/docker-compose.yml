@@ -1,0 +1,25 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: teamclaw:latest
+    container_name: teamclaw-app
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      # Runtime directories
+      JETLINKS_AI_DATA_DIR: /data/.jetlinks-ai
+      JETLINKS_AI_DB_PATH: /data/.jetlinks-ai/jetlinks_ai.db
+      JETLINKS_AI_OUTPUTS_DIR: /data/outputs
+      JETLINKS_AI_WORKSPACE: /workspace
+
+      # Serve built frontend assets from the backend container.
+      JETLINKS_AI_UI_DIST_DIR: /app/frontend/dist
+    ports:
+      - "8001:8001"
+    volumes:
+      - ../.jetlinks-ai:/data/.jetlinks-ai
+      - ../outputs:/data/outputs
+      - ../workspace:/workspace

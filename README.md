@@ -81,6 +81,18 @@ If you want chat / agent capability, set at least:
 OPENAI_API_KEY=your-key
 ```
 
+### Run with Docker (self-host)
+
+This repo includes a simple Docker Compose setup (single container + SQLite by default):
+
+```bash
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+Default URL: `http://127.0.0.1:8001` (UI + API), health: `http://127.0.0.1:8001/health`.
+
+More details: `docker/README.md`.
+
 ## Feature Map
 
 ### Workspace and team collaboration
