@@ -327,29 +327,37 @@ flowchart LR
 
 ### 2.1 分层职责
 
-- Router 层：参数校验、鉴权、HTTP 响应拼装，尽量“薄”
-- Service 层：业务编排（Agent、文档、浏览器、IM 回调）
-- Agent 层：模型调用协议、工具循环、上下文裁剪、事件追踪
-- Storage 层：SQLite/Postgres 持久化 + 内存会话 + 文件输出目录
+| 分层 | 主要职责 | 对应位置 |
+| --- | --- | --- |
+| Router 层 | 参数校验、鉴权、HTTP 响应拼装，尽量保持“薄” | `backend/jetlinks_ai_api/routers/` |
+| Service 层 | 业务编排，如 Agent、文档、浏览器、IM 回调 | `backend/jetlinks_ai_api/services/` |
+| Agent 层 | 模型调用协议、工具循环、上下文裁剪、事件追踪 | `backend/jetlinks_ai_api/agent/` |
+| Storage 层 | SQLite / Postgres 持久化、内存会话、文件输出目录 | `db.py`、`session_store.py`、`.jetlinks-ai/` |
 
 ### 2.2 会话与上下文
 
-- 会话主键：`session_id`
-- 双层存储：
-  - 进程内：`SessionStore`（低延迟、含 TTL 和最大会话数裁剪）
-  - 持久化：`chat_sessions` + `chat_messages`（可恢复）
-- 重启恢复：`/api/chat` 会尝试把数据库历史回灌到内存会话
-- 上下文控制：
-  - `JETLINKS_AI_MAX_SESSION_MESSAGES`：限制历史消息条数
-  - `JETLINKS_AI_MAX_CONTEXT_CHARS`：按字符估算做近似裁剪
+| 项目 | 说明 |
+| --- | --- |
+| 会话主键 | `session_id` |
+| 进程内会话 | `SessionStore`，低延迟，支持 TTL 和最大会话数裁剪 |
+| 持久化会话 | `chat_sessions` + `chat_messages`，用于恢复和历史查询 |
+| 重启恢复 | `/api/chat` 会尝试把数据库历史回灌回内存会话 |
+| 消息条数控制 | `JETLINKS_AI_MAX_SESSION_MESSAGES` |
+| 上下文长度控制 | `JETLINKS_AI_MAX_CONTEXT_CHARS`，按字符近似裁剪 |
 
 ### 2.3 Provider 策略
 
-- `openai`：走内置 `run_agent_task + tools` 全能力链路
-- `codex`：走本机 `codex exec --json` 非交互链路（适合代码任务）
-- `pi`：走 `pi-mono` 的 Coding Agent CLI（文本模式；需要 `JETLINKS_AI_ENABLE_PI=1` + 子模块），适合代码/任务分解；对文档/PPT/原型/附件等场景会自动回退到内置 OpenAI 工具链
-- `opencode` / `nanobot`：优先委托外部 Agent
-- 对文档/PPT/原型/附件等场景，`opencode` 与 `nanobot` 会自动回退到内置 OpenAI 工具链，以保证产物能力一致
+| Provider | 执行方式 | 适合什么 |
+| --- | --- | --- |
+| `openai` | 内置 `run_agent_task + tools` 全能力链路 | 通用聊天、文档、PPT、原型、交付物 |
+| `codex` | 本机 `codex exec --json` 非交互链路 | 代码任务、仓库改造 |
+| `pi` | `pi-mono` Coding Agent CLI | 代码分解、任务执行；文档类场景可回退内置工具链 |
+| `opencode` | 优先委托外部 Agent | 审批式工程流、外部 Agent 协作 |
+| `nanobot` | 优先委托外部 Agent | 代理式执行、工程任务 |
+
+补充说明：
+
+- 文档 / PPT / 原型 / 附件等场景，`opencode` 与 `nanobot` 会自动回退到内置 OpenAI 工具链，保证产物能力一致
 - provider 选择优先级：请求参数 `provider` > `.env` 中 `JETLINKS_AI_PROVIDER` > 后端默认 `openai`
 
 ### 2.3.1 OpenClaw / OpenCode（可选集成）
@@ -365,83 +373,110 @@ flowchart LR
 
 ### 2.4 安全策略
 
-- 服务端开关是能力上限：`JETLINKS_AI_ENABLE_SHELL/WRITE/BROWSER`
-- 前端只能在上限内“申请”能力，不能越权开启
-- 高危能力仅团队 `owner/admin` 可启用
-- 文件下载采用 JWT 下载令牌，不暴露裸文件路径
-- Team/User 维度强隔离：会话、文件、技能、配置都绑定团队
+| 安全点 | 说明 |
+| --- | --- |
+| 服务端开关 | `JETLINKS_AI_ENABLE_SHELL/WRITE/BROWSER` 决定能力上限 |
+| 前端权限 | 前端只能在服务端允许范围内申请能力，不能越权 |
+| 高危能力 | 仅团队 `owner/admin` 可启用 |
+| 文件下载 | 使用 JWT 下载令牌，不暴露裸文件路径 |
+| 数据隔离 | 会话、文件、技能、配置都绑定 Team / User |
 
 ### 2.5 可追溯与调试
 
-- 聊天返回 `events`（工具调用、工具结果、裁剪、provider 事件）
-- 历史会话可查看完整消息与事件
-- 历史快照同步到 `.jetlinks-ai/history_sessions/`，支持目录检索（`/api/history/search`）
+| 能力 | 说明 |
+| --- | --- |
+| `events` | 聊天返回工具调用、工具结果、裁剪、provider 事件 |
+| 历史会话 | 可查看完整消息与事件 |
+| 历史快照 | 同步到 `.jetlinks-ai/history_sessions/`，支持 `/api/history/search` |
 
 ## 3. 核心链路
 
 ### 3.1 聊天链路（`POST /api/chat`）
 
-1. 鉴权，解析团队与项目上下文
-2. 组装团队技能提示词（`team_skills`）
-3. 尝试会话回灌（数据库 -> `SessionStore`）
-4. 调用 `AgentService.chat(...)`
-5. Agent 根据 provider 走对应执行路径
-6. 生成回复与事件
-7. 持久化 `chat_sessions/chat_messages/file_records`
-8. 同步历史快照（best effort）
+| 步骤 | 说明 |
+| --- | --- |
+| 1 | 鉴权，解析团队与项目上下文 |
+| 2 | 组装团队技能提示词（`team_skills`） |
+| 3 | 尝试会话回灌（数据库 -> `SessionStore`） |
+| 4 | 调用 `AgentService.chat(...)` |
+| 5 | Agent 根据 provider 走对应执行路径 |
+| 6 | 生成回复与事件 |
+| 7 | 持久化 `chat_sessions/chat_messages/file_records` |
+| 8 | 同步历史快照（best effort） |
 
 ### 3.2 工具执行链路
 
-1. 模型输出 tool_calls
-2. `run_agent_task` 逐个校验参数（Pydantic）
-3. 调用 tool handler
-4. 工具结果写回 `tool` 消息并进入下一轮
-5. 直到模型给出最终 assistant 文本或达到 `max_steps`
+| 步骤 | 说明 |
+| --- | --- |
+| 1 | 模型输出 `tool_calls` |
+| 2 | `run_agent_task` 逐个校验参数（Pydantic） |
+| 3 | 调用对应 tool handler |
+| 4 | 工具结果写回 `tool` 消息并进入下一轮 |
+| 5 | 直到模型给出最终 assistant 文本或达到 `max_steps` |
 
 ### 3.3 文档/原型产物链路
 
-1. 调用 `DocService` / `PrototypeService`
-2. 输出文件写入 `JETLINKS_AI_OUTPUTS_DIR`（默认 `.jetlinks-ai/outputs`）
-3. 生成带 token 的 `download_url`
-4. 建立 `file_records` 索引，支持历史检索与下载
+| 步骤 | 说明 |
+| --- | --- |
+| 1 | 调用 `DocService` / `PrototypeService` |
+| 2 | 输出文件写入 `JETLINKS_AI_OUTPUTS_DIR`（默认 `.jetlinks-ai/outputs`） |
+| 3 | 生成带 token 的 `download_url` |
+| 4 | 建立 `file_records` 索引，支持历史检索与下载 |
 
 ## 4. 代码结构（按职责）
 
 ### 4.1 后端
 
-- `backend/jetlinks_ai_api/main.py`：应用入口、路由挂载、生命周期
-- `backend/jetlinks_ai_api/config.py`：环境变量与配置加载
-- `backend/jetlinks_ai_api/deps.py`：依赖注入、鉴权上下文
-- `backend/jetlinks_ai_api/db.py`：SQLite/Postgres schema 与访问辅助
-- `backend/jetlinks_ai_api/routers/`：HTTP API
-- `backend/jetlinks_ai_api/services/`：业务服务
-- `backend/jetlinks_ai_api/agent/`：Agent 运行时、provider、tools
-- `backend/jetlinks_ai_api/session_store.py`：会话内存存储
+| 位置 | 作用 |
+| --- | --- |
+| `backend/jetlinks_ai_api/main.py` | 应用入口、路由挂载、生命周期 |
+| `backend/jetlinks_ai_api/config.py` | 环境变量与配置加载 |
+| `backend/jetlinks_ai_api/deps.py` | 依赖注入、鉴权上下文 |
+| `backend/jetlinks_ai_api/db.py` | SQLite / Postgres schema 与访问辅助 |
+| `backend/jetlinks_ai_api/routers/` | HTTP API 路由层 |
+| `backend/jetlinks_ai_api/services/` | 业务服务编排 |
+| `backend/jetlinks_ai_api/agent/` | Agent 运行时、provider、tools |
+| `backend/jetlinks_ai_api/session_store.py` | 会话内存存储 |
 
 ### 4.2 前端
 
-- `frontend/src/App.vue`：主界面与主要交互编排
-- `frontend/src/composables/useTeamWorkspaceState.ts`：团队/项目/技能/需求状态
-- `frontend/src/composables/useHistoryState.ts`：会话与文件历史状态
-- `frontend/src/api/*.ts`：API 客户端分模块封装
+| 位置 | 作用 |
+| --- | --- |
+| `frontend/src/App.vue` | 主界面与主要交互编排 |
+| `frontend/src/composables/useTeamWorkspaceState.ts` | 团队 / 项目 / 技能 / 需求状态 |
+| `frontend/src/composables/useHistoryState.ts` | 会话与文件历史状态 |
+| `frontend/src/api/*.ts` | API 客户端分模块封装 |
 
 ### 4.3 其他
 
-- `roles/`：角色系统提示词模板
-- `skills/`：技能模板
-- `JETLINKS_AI_OUTPUTS_DIR`：生成产物目录（默认 `.jetlinks-ai/outputs`）
-- `.jetlinks-ai/`：运行期数据（DB、日志、JWT secret、历史快照）
-- `src/` + `dist/`：旧版 Node CLI/Gateway 原型（兼容保留）
+| 位置 | 作用 |
+| --- | --- |
+| `roles/` | 角色系统提示词模板 |
+| `skills/` | 技能模板 |
+| `JETLINKS_AI_OUTPUTS_DIR` | 生成产物目录（默认 `.jetlinks-ai/outputs`） |
+| `.jetlinks-ai/` | 运行期数据（DB、日志、JWT secret、历史快照） |
+| `src/` + `dist/` | 旧版 Node CLI / Gateway 原型（兼容保留） |
+
+### 4.4 建议阅读顺序
+
+| 如果你想看… | 建议先读 |
+| --- | --- |
+| 整个应用怎么启动 | `backend/jetlinks_ai_api/main.py`、`frontend/src/App.vue` |
+| API 怎么组织 | `backend/jetlinks_ai_api/routers/` |
+| 业务逻辑在哪里 | `backend/jetlinks_ai_api/services/` |
+| Agent / 工具链怎么跑 | `backend/jetlinks_ai_api/agent/`、`services/agent_service.py` |
+| 前端状态怎么分层 | `frontend/src/composables/` |
+| 文件和历史如何落盘 | `db.py`、`history_file_store.py`、`.jetlinks-ai/` |
 
 ## 5. 数据模型（SQLite/Postgres）
 
-核心表：
-
-- 身份与团队：`users` `teams` `memberships` `invites`
-- 团队配置：`team_skills` `team_projects` `team_requirements` `team_settings`
-- IM 集成：`wecom_apps` `feishu_webhooks`
-- 聊天与文件：`chat_sessions` `chat_messages` `file_records`
-- 元数据：`meta`（schema version）
+| 表分组 | 核心表 | 说明 |
+| --- | --- | --- |
+| 身份与团队 | `users` `teams` `memberships` `invites` | 用户、团队、成员关系、邀请码 |
+| 团队配置 | `team_skills` `team_projects` `team_requirements` `team_settings` | 团队技能、项目、需求、工作区配置 |
+| IM 集成 | `wecom_apps` `feishu_webhooks` | 飞书 / 企微接入配置 |
+| 聊天与文件 | `chat_sessions` `chat_messages` `file_records` | 会话、消息、生成文件索引 |
+| 元数据 | `meta` | schema version 等元信息 |
 
 关系特征：
 
@@ -451,72 +486,21 @@ flowchart LR
 
 ## 6. API 分组
 
-认证与身份：
+| 分组 | 主要接口 | 说明 |
+| --- | --- | --- |
+| 认证与身份 | `GET /api/auth/status` `POST /api/auth/setup` `POST /api/auth/login` `POST /api/auth/register` `GET /api/me` `POST /api/auth/switch-team` | 登录、注册、初始化、切换团队 |
+| 聊天与历史 | `POST /api/chat` `GET /api/history/sessions` `GET /api/history/sessions/{session_id}` `DELETE /api/history/sessions/{session_id}` `GET /api/history/files` `GET /api/history/search` | 对话、会话历史、文件历史、检索 |
+| 文件与产物 | `POST /api/files/upload-image` `POST /api/files/upload-file` `GET /api/files/{file_id}` | 上传与下载产物 |
+| 文档与原型 | `POST /api/docs/ppt` `POST /api/docs/quote` `POST /api/docs/quote-xlsx` `POST /api/docs/inspection` `POST /api/docs/inspection-xlsx` `POST /api/prototype/generate` `GET /api/prototype/preview/{prototype_id}/{file_path:path}` | 文档生成、原型生成与预览 |
+| 工具与能力 | `POST /api/browser/start` `POST /api/browser/navigate` `POST /api/browser/screenshot` `GET /api/skills` | 浏览器能力与内置技能 |
+| 团队后台 | `GET/PUT /api/team/settings` `GET/POST/PUT/DELETE /api/team/projects` `GET/POST/PUT/DELETE /api/team/skills` `GET/POST/PUT/DELETE /api/team/requirements` `GET/POST/PUT/DELETE /api/team/members` `GET/POST/DELETE /api/team/invites` | 团队工作台管理能力 |
+| 外部集成 | `GET/POST/PUT/DELETE /api/team/wecom/apps` `GET/POST/PUT/DELETE /api/team/feishu/webhooks` `POST /api/team/feishu/webhooks/ensure-preset` | 飞书 / 企微配置 |
+| OpenAI 兼容代理 | `POST /openai/v1/responses` `POST /openai/v1/chat/completions` `GET /openai/v1/models` | 兼容式模型调用入口 |
 
-- `GET /api/auth/status`
-- `POST /api/auth/setup`
-- `POST /api/auth/login`
-- `POST /api/auth/register`
-- `GET /api/me`
-- `POST /api/auth/switch-team`
+补充说明：
 
-聊天与历史：
-
-- `POST /api/chat`
-- `GET /api/history/sessions`
-- `GET /api/history/sessions/{session_id}`
-- `DELETE /api/history/sessions/{session_id}`
-- `GET /api/history/files`
-- `GET /api/history/search`
-
-文件与产物：
-
-- `POST /api/files/upload-image`
-- `POST /api/files/upload-file`
-- `GET /api/files/{file_id}`
-
-文档与原型：
-
-- `POST /api/docs/ppt`
-  - 支持可选参数：`style`（`auto|modern_blue|minimal_gray|dark_tech|warm_business|template_jetlinks|template_team`）
-  - 支持可选参数：`layout_mode`（`auto|focus|single_column|two_column|cards`）
-- `POST /api/docs/quote`
-- `POST /api/docs/quote-xlsx`
-- `POST /api/docs/inspection`
-- `POST /api/docs/inspection-xlsx`
-- `POST /api/prototype/generate`
-- `GET /api/prototype/preview/{prototype_id}/{file_path:path}`
-
-工具/能力：
-
-- `POST /api/browser/start`
-- `POST /api/browser/navigate`
-- `POST /api/browser/screenshot`
-- `GET /api/skills`
-
-团队后台：
-
-- `GET/PUT /api/team/settings`
-- `GET/POST/PUT/DELETE /api/team/projects`
-- `GET /api/team/projects/discover`
-- `POST /api/team/projects/import`
-- `GET /api/team/projects/{project_id}/tree`
-- `GET/POST/PUT/DELETE /api/team/skills`
-- `POST /api/team/skills/ai-draft`
-- `GET/POST/PUT/DELETE /api/team/requirements`
-- `POST /api/team/requirements/{requirement_id}/accept`
-- `POST /api/team/requirements/{requirement_id}/reject`
-- `GET/POST/PUT/DELETE /api/team/members`
-- `GET/POST/DELETE /api/team/invites`
-- `GET/POST/PUT/DELETE /api/team/wecom/apps`
-- `GET/POST/PUT/DELETE /api/team/feishu/webhooks`
-- `POST /api/team/feishu/webhooks/ensure-preset`
-
-OpenAI 兼容代理：
-
-- `POST /openai/v1/responses`
-- `POST /openai/v1/chat/completions`
-- `GET /openai/v1/models`
+- `POST /api/docs/ppt` 支持可选参数 `style`：`auto|modern_blue|minimal_gray|dark_tech|warm_business|template_jetlinks|template_team`
+- `POST /api/docs/ppt` 支持可选参数 `layout_mode`：`auto|focus|single_column|two_column|cards`
 
 ### 6.1 需求交付（跨团队）
 
@@ -820,24 +804,11 @@ sudo systemctl status codeskteam
 
 ## 10. 扩展指南（从哪里改）
 
-新增一个工具：
-
-1. 在 `backend/jetlinks_ai_api/agent/tools/` 增加 tool 定义
-2. 在 `AgentService._build_tools()` 注册
-3. 如需前端展示，补充 `events` 解析与 UI 展示逻辑
-
-新增一个业务接口：
-
-1. `backend/jetlinks_ai_api/routers/` 新建 router
-2. 业务逻辑写到 `services/`
-3. 在 `main.py` 挂载
-4. 前端 `frontend/src/api/` 增加客户端方法
-
-新增 provider：
-
-1. 实现 `ModelProvider` 或 provider service
-2. 在 `AgentService` 选择分支接入
-3. 补充 `.env.example` 和前端 provider 选项
+| 你要扩展什么 | 主要改动位置 | 通常要做的事 |
+| --- | --- | --- |
+| 新增一个工具 | `backend/jetlinks_ai_api/agent/tools/`、`AgentService`、前端事件展示 | 增加 tool 定义、注册到工具列表、必要时补充前端 `events` 展示 |
+| 新增一个业务接口 | `backend/jetlinks_ai_api/routers/`、`services/`、`main.py`、`frontend/src/api/` | 新建 router、写服务逻辑、挂载路由、补前端 API 客户端 |
+| 新增 provider | provider service / `ModelProvider`、`AgentService`、`.env.example`、前端 provider 选项 | 实现 provider、接入选择分支、补配置项、补 UI 选项 |
 
 ## 11. 常见问题
 
