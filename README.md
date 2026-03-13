@@ -46,6 +46,33 @@ You can think of it as an **enterprise-ready OpenClaw workspace**: chat-driven e
 | --- |
 | ![ChatBI](docs/images/screenshot-chatbi.png) |
 
+## Who It's For
+
+- **Delivery teams**: turn requirements into presentations, quotations, inspection sheets, prototypes, and reusable assets
+- **Product + engineering teams**: combine chat, repo context, prompt skills, and controlled tool execution in one workspace
+- **AI platform / ops teams**: manage OpenClaw-connected resources, external channels, and governed runtime capabilities
+- **Internal efficiency teams**: centralize team prompts, project context, generated files, and knowledge traces
+
+## Typical Scenarios
+
+| Scenario | What JetLinks AI helps you do |
+| --- | --- |
+| From requirement to deliverable | Start from a chat request and generate PPT, quotation, inspection sheet, poster, or prototype |
+| Controlled coding workspace | Switch to `codex` or `opencode` for repo-aware engineering tasks with governed tools |
+| Team prompt operations | Maintain shared team skills, project context, and requirement handoff in one place |
+| OpenClaw operations cockpit | Check gateway status, sync channels/plugins/skills, and manage team-scoped OpenClaw resources |
+| ChatBI for business users | Ask questions in natural language and get SQL, tables, and analysis back |
+| Browser-assisted research | Open pages, navigate, capture screenshots, and keep output attached to the session |
+
+## Quick Navigation
+
+- **Preview**: screenshots and product visuals
+- **Platform Capability Overview**: feature map by business domain
+- **Providers, Profiles, and Safety Levels**: how runtime choices work
+- **Workspace Navigation**: what each major panel and tab does
+- **Service Topology**: frontend/backend/runtime structure
+- **Quick Start**: local and Docker setup
+
 ## Platform Capability Overview
 
 | Domain | What users can do | Key routes / modules |
