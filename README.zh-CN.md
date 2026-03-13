@@ -2,8 +2,14 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-JetLinks AI 是一个开源、可自托管的 **团队 AI 交付工作台**。  
-你可以把它理解为 **更适合企业和团队落地的 OpenClaw 工作台**：把对话式执行、共享上下文、需求/项目管理、交付物生成，以及 OpenClaw 运营能力整合到一个产品里。
+[![前端](https://img.shields.io/badge/frontend-Vue%203%20%2B%20Vite-42b883)](frontend/)
+[![后端](https://img.shields.io/badge/backend-FastAPI-009688)](backend/)
+[![数据库](https://img.shields.io/badge/database-SQLite%20%2F%20Postgres-336791)](backend/README.md)
+[![部署](https://img.shields.io/badge/deployment-Self--Hosted-2563eb)](docker/README.md)
+[![许可证](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+
+JetLinks AI 是一个开源、可自托管的 **面向交付型团队的 AI 工作台**。  
+你可以把它理解为 **把聊天、团队上下文、项目协同、交付物生成和 OpenClaw 运营整合到一起的统一工作空间**，让团队从需求到执行再到产物输出都尽量在一个系统里完成。
 
 > 从“想法 / 需求”到“执行 / 交付”，把聊天、项目、文档、原型和 OpenClaw 运营统一到一个界面里。
 
@@ -72,6 +78,22 @@ JetLinks AI 是一个开源、可自托管的 **团队 AI 交付工作台**。
 - **工作台导航说明**：了解左侧分区和工作台页签
 - **服务拓扑图**：看清前后端与运行时关系
 - **快速开始**：本地启动和 Docker 部署
+
+## 3 分钟快速体验
+
+1. **启动服务**：运行 `pnpm dev`
+2. **打开页面**：访问 `http://127.0.0.1:5173`
+3. **完成初始化**：创建第一个管理员账号和团队
+4. **试一个真实任务**：让它生成 PPT、报价单、原型，或者分析当前仓库
+5. **切换侧边栏**：体验工作台、技能、历史、运行四个主分区
+6. **查看产物**：在右侧预览面板或 `/api/files/{file_id}` 下载生成文件
+
+建议你第一次就试这些提示词：
+
+- `帮我生成一份私有化 AI 交付项目报价单`
+- `做一个企业内部 AI 培训 PPT`
+- `生成一个巡检驾驶舱 HTML 原型`
+- `解释一下这个仓库，并给出第一批重构建议`
 
 ## 平台功能总览
 

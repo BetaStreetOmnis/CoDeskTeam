@@ -2,8 +2,14 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-JetLinks AI is an open-source, self-hosted **AI delivery workspace for teams**.
-You can think of it as an **enterprise-ready OpenClaw workspace**: chat-driven execution, shared team context, project / requirement management, deliverable automation, and OpenClaw operations in one product.
+[![Frontend](https://img.shields.io/badge/frontend-Vue%203%20%2B%20Vite-42b883)](frontend/)
+[![Backend](https://img.shields.io/badge/backend-FastAPI-009688)](backend/)
+[![Database](https://img.shields.io/badge/database-SQLite%20%2F%20Postgres-336791)](backend/README.md)
+[![Deployment](https://img.shields.io/badge/deployment-Self--Hosted-2563eb)](docker/README.md)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+
+JetLinks AI is an open-source, self-hosted **AI workspace for delivery-oriented teams**.
+It combines **chat, team context, project coordination, deliverable generation, and OpenClaw operations** into one product — so teams can move from request to execution to artifact without switching tools.
 
 > From idea to execution to deliverables — chat, projects, docs, prototypes, and OpenClaw ops in one place.
 
@@ -72,6 +78,22 @@ You can think of it as an **enterprise-ready OpenClaw workspace**: chat-driven e
 - **Workspace Navigation**: what each major panel and tab does
 - **Service Topology**: frontend/backend/runtime structure
 - **Quick Start**: local and Docker setup
+
+## 3-Minute Tour
+
+1. **Start the stack**: run `pnpm dev`
+2. **Open the app**: visit `http://127.0.0.1:5173`
+3. **Create the first admin**: finish the initial setup flow
+4. **Try a real task**: ask for a PPT, quotation, prototype, or repo change
+5. **Check the side panels**: switch between Workspace, Skills, History, and Session
+6. **Download the result**: open generated files from the preview panel or `/api/files/{file_id}`
+
+Suggested first prompts:
+
+- `Create a quotation for a self-hosted AI delivery project`
+- `Generate a PPT for internal AI training`
+- `Build an HTML prototype for an inspection dashboard`
+- `Explain this repository and suggest the first refactor`
 
 ## Platform Capability Overview
 
