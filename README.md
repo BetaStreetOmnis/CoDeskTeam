@@ -26,6 +26,142 @@ You can think of it as an **enterprise-ready OpenClaw workspace**: chat-driven e
 - **OpenClaw operations center**: status probe, one-click sync, channel/plugin/skill management, team-scoped skill registry
 - **Secure by default**: high-risk tools (`shell`, `write`, `browser`) are disabled unless explicitly enabled
 
+## Platform Capability Overview
+
+| Domain | What users can do | Key routes / modules |
+| --- | --- | --- |
+| Identity & multi-team | Setup first admin, login/register, switch active team, manage invites and members | `/api/auth/*`, `/api/team/invites`, `/api/team/members` |
+| Workspace & projects | Register repositories, discover/import projects, browse workspace tree, preview README, export Markdown | `/api/team/projects*`, `/api/team/workspace/*`, `/api/team/export-md` |
+| Requirement collaboration | Create requirements, assign delivery teams, accept/reject outgoing work | `/api/team/requirements*` |
+| AI chat & agent execution | Run chat tasks with provider selection, attachments, security presets, and team context | `/api/chat`, `AgentService`, `agent/tools/*` |
+| Skills center | Use built-in pipelines and maintain team prompt skills, including AI draft generation | `/api/skills`, `/api/skills/pipeline/*`, `/api/team/skills*` |
+| Deliverables | Generate PPTX, quotation, inspection sheet, poster, and HTML prototype with preview/download | `/api/docs/*`, `/api/prototype/*`, `/api/files/*` |
+| History & retrieval | Review sessions/files, replay context, search workspace and history snapshots | `/api/history/*` |
+| ChatBI | Manage datasources, ask questions in natural language, stream SQL + analysis results | `/api/chatbi/*` |
+| Browser & controlled tools | Start a browser session, navigate, take screenshots, and gate shell/write/browser tools | `/api/browser/*`, tool gating in `.env` |
+| OpenClaw & external channels | Probe gateway status, sync channels/plugins/skills, receive OpenClaw/Feishu/WeCom events | `/api/team/openclaw/*`, `/api/integrations/openclaw/message`, `/api/feishu/*`, `/api/wecom/*` |
+
+## Providers, Profiles, and Safety Levels
+
+### Provider matrix
+
+Provider availability is dynamic. The frontend reads `/api/meta`, and the actual list depends on your local runtime, `.env`, and installed CLIs.
+
+| Provider | Best for | Notes |
+| --- | --- | --- |
+| `openai` | General chat, docs, PPT, quotations, prototypes | Built-in full toolchain; best default for deliverable generation |
+| `glm` | Alternative LLM provider | Appears when `GLM_API_KEY` is configured |
+| `codex` | Local coding tasks and repo changes | Works with local Codex CLI; supports optional dangerous mode |
+| `claude` | Local Claude CLI workflows | Appears only when the configured Claude command is available |
+| `opencode` | Agent loop with approvals | Good for engineering workflows; some doc/prototype cases fall back to built-in tools |
+| `nanobot` | External coding/task agent | Useful for delegated execution; doc/prototype cases can fall back to built-in tools |
+| `openclaw` | OpenClaw-connected runtime | Exposed when OpenClaw integration is enabled |
+| `pi` | Pi coding agent | Appears when `JETLINKS_AI_ENABLE_PI=1` |
+| `mock` | Demo, testing, screenshots | Safe fake provider with deterministic responses |
+
+### Built-in agent profiles
+
+The workspace can apply preset combinations of provider + role + UI vibe + safety level:
+
+| Profile | Default provider | Role | Safety | Typical use |
+| --- | --- | --- | --- | --- |
+| Default Assistant | `opencode` | `general` | `safe` | Day-to-day team tasks |
+| Engineer Mode | `opencode` | `engineer` | `power` | Code edits, repo work, tool-heavy flows |
+| Writer Mode | `openai` | `general` | `standard` | PPT, quotations, documentation |
+| Prototype Mode | `openai` | `engineer` | `standard` | HTML pages, prototype artifacts |
+| Research Mode | `openai` | `general` | `safe` | Information synthesis with minimal permissions |
+| Custom | Current selection | manual | manual | Fine-grained control per session |
+
+### Safety presets
+
+The frontend can request a lower-risk or higher-capability session, but the server-side `.env` remains the hard upper bound.
+
+| Preset | Shell | Write | Browser | Use case |
+| --- | --- | --- | --- | --- |
+| `safe` | off | off | off | Read-only chat and analysis |
+| `standard` | off | on | off | Document creation and file output |
+| `power` | on | on | on | Full tool usage for admins/engineering tasks |
+| `custom` | manual | manual | manual | Explicit per-toggle control |
+
+### How to choose a provider
+
+| If you want to… | Recommended provider | Why |
+| --- | --- | --- |
+| Generate PPT, quotations, posters, inspection sheets, or prototypes reliably | `openai` | It uses the built-in document/prototype toolchain directly |
+| Edit code in a local repository with stronger engineering workflow support | `codex` | Best fit for local code changes and repo-aware coding tasks |
+| Run approval-oriented agent loops for engineering collaboration | `opencode` | Better aligned with reviewed / gated execution flows |
+| Use an alternative domestic model endpoint | `glm` | Good when your deployment standardizes on GLM |
+| Route tasks into an OpenClaw-connected runtime | `openclaw` | Best when your team already operates around OpenClaw resources |
+| Demonstrate the UI without real model cost or credentials | `mock` | Safe for screenshots, demos, and smoke checks |
+
+Practical rule of thumb:
+
+- Start with `openai` for deliverables and general-purpose work
+- Use `codex` when the task is clearly “modify code in this repo”
+- Use `opencode` when you want stronger approval-style engineering flow
+- Use `mock` for onboarding, screenshots, and local demos
+- Switch only when your infra, compliance, or workflow specifically requires another provider
+
+## Workspace Navigation
+
+### Left-side sections
+
+| Section | What it contains |
+| --- | --- |
+| Workspace | Projects, requirements, capability toggles, AI+ toolkit, browser, ChatBI |
+| Skills | Built-in skill templates and team prompt skills |
+| History | Session history, generated files, workspace/history search |
+| Session | Runtime trace, current conversation context, execution state |
+
+### Workspace tabs
+
+| Tab | Purpose |
+| --- | --- |
+| Projects | Project registry, directory tree, README preview, import/discover |
+| Requirements | Requirement board, cross-team delivery, acceptance/rejection flow |
+| Capabilities | Provider/profile selection, safety presets, shell/write/browser toggles |
+| AI+ Toolkit | Pipeline-style tools for vision, media, content, and office scenarios |
+| ChatBI | Natural-language BI queries over local or remote datasources |
+| Browser | Built-in browser session, navigation, and screenshots |
+
+## Service Topology
+
+```mermaid
+flowchart TD
+  User[Team users / admins] --> Web[Vue workspace]
+  Web --> Auth[Auth & team isolation]
+  Web --> Workspace[Projects / requirements / skills]
+  Web --> Chat[AI chat console]
+  Web --> History[History / files / search]
+  Web --> ChatBI[ChatBI analysis]
+  Web --> Ops[OpenClaw ops center]
+
+  Chat --> Agent[AgentService]
+  Agent --> Providers[OpenAI / Codex / OpenCode / Pi / Nanobot / Claude]
+  Agent --> Tools[Shell / Write / Browser / Docs / Prototype / Attachments]
+
+  Workspace --> Export[README preview / Markdown export]
+  Tools --> Deliverables[PPTX / Quote / Inspection / Poster / Prototype]
+  ChatBI --> DataSources[SQLite / remote datasources]
+  Ops --> Gateway[OpenClaw gateway resources]
+
+  Auth --> DB[(SQLite / Postgres)]
+  History --> DB
+  Export --> Files[(outputs/ + file_records)]
+  Deliverables --> Files
+```
+
+## Included Backend Services
+
+- **`AuthService`**: user setup, login, registration, team switching, and access control
+- **`AgentService`**: provider routing, tool orchestration, session restore, and event tracing
+- **`DocService` + `services/docs/*`**: PPT, quotation, inspection sheet, and poster generation
+- **`PrototypeService`**: HTML prototype packaging and in-app preview
+- **`QueryEngine` + `services/chatbi/*`**: ChatBI datasource management, SQL generation, execution, and analysis
+- **`OpenClawAdminService`**: OpenClaw status probing, sync, and team-scoped resource management
+- **`FeishuWebhookService` / `WecomService`**: inbound IM callbacks and team integrations
+- **`TeamExportService` / `history_file_store`**: workspace export, file indexing, and historical retrieval
+
 ## Architecture
 
 - **Frontend**: Vue 3 + Vite
@@ -39,6 +175,20 @@ You can think of it as an **enterprise-ready OpenClaw workspace**: chat-driven e
 ![JetLinks AI · Enterprise OpenClaw Workspace](docs/images/github-hero.svg)
 
 ![JetLinks AI UI](docs/images/screenshot.png)
+
+### More Screenshots
+
+| Setup & onboarding | Workspace & README preview |
+| --- | --- |
+| ![Setup](docs/images/screenshot-setup.png) | ![Workspace](docs/images/screenshot-workspace.png) |
+
+| Built-in skills center | AI chat workspace |
+| --- | --- |
+| ![Skills](docs/images/screenshot-skills.png) | ![Chat](docs/images/screenshot-chat.png) |
+
+| ChatBI workspace |
+| --- |
+| ![ChatBI](docs/images/screenshot-chatbi.png) |
 
 ## Quick Start
 

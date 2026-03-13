@@ -26,11 +26,161 @@ JetLinks AI 是一个开源、可自托管的 **团队 AI 交付工作台**。
 - **OpenClaw 运营中心**：状态探测、一键同步、频道/插件/技能管理、团队级技能注册表
 - **默认更安全**：`shell`、`write`、`browser` 等高风险工具需显式开启
 
+## 平台功能总览
+
+| 模块 | 能做什么 | 主要接口 / 代码模块 |
+| --- | --- | --- |
+| 身份与多团队 | 初始化管理员、登录注册、切换团队、管理邀请和成员 | `/api/auth/*`、`/api/team/invites`、`/api/team/members` |
+| 项目与工作区 | 注册仓库、发现/导入项目、浏览目录树、预览 README、导出 Markdown | `/api/team/projects*`、`/api/team/workspace/*`、`/api/team/export-md` |
+| 需求协同 | 创建需求、分派交付团队、处理接单/拒单 | `/api/team/requirements*` |
+| AI 对话与 Agent | 带附件聊天、选择 provider、按安全预设运行工具，并复用团队上下文 | `/api/chat`、`AgentService`、`agent/tools/*` |
+| 技能中心 | 使用内置 Pipeline，维护团队 Prompt 技能，并支持 AI 草拟技能 | `/api/skills`、`/api/skills/pipeline/*`、`/api/team/skills*` |
+| 交付物中心 | 生成 PPT、报价单、报检单、海报、HTML 原型，并支持预览/下载 | `/api/docs/*`、`/api/prototype/*`、`/api/files/*` |
+| 历史与检索 | 查看会话/文件历史、恢复上下文、检索工作区与历史快照 | `/api/history/*` |
+| ChatBI | 管理数据源，自然语言问数，流式返回 SQL、结果和分析 | `/api/chatbi/*` |
+| 浏览器与受控工具 | 启动浏览器、导航、截图，并通过 `.env` 控制 shell/write/browser 权限 | `/api/browser/*`、工具开关 |
+| OpenClaw 与外部通道 | 查看网关状态、同步频道/插件/技能，并接收 OpenClaw / 飞书 / 企微事件 | `/api/team/openclaw/*`、`/api/integrations/openclaw/message`、`/api/feishu/*`、`/api/wecom/*` |
+
+## 提供商、档案与安全档位
+
+### 提供商矩阵
+
+提供商列表不是写死的。前端会读取 `/api/meta`，最终可选项取决于你的本地运行环境、`.env` 配置和已安装的 CLI。
+
+| 提供商 | 适合场景 | 说明 |
+| --- | --- | --- |
+| `openai` | 通用对话、文档、PPT、报价、原型 | 内置完整工具链，最适合交付物生成 |
+| `glm` | 备用大模型通道 | 配置 `GLM_API_KEY` 后出现 |
+| `codex` | 本地代码任务、仓库改造 | 依赖本地 Codex CLI，可选无沙箱模式 |
+| `claude` | 本地 Claude CLI 工作流 | 仅在配置的 Claude 命令可用时出现 |
+| `opencode` | 带审批链路的 Agent 工程流 | 适合工程任务；文档/原型场景可自动回退内置工具链 |
+| `nanobot` | 外部编码/任务代理 | 适合委托执行；文档/原型可回退内置工具链 |
+| `openclaw` | OpenClaw 接入运行时 | 开启 OpenClaw 集成后可用 |
+| `pi` | Pi 编码代理 | 需设置 `JETLINKS_AI_ENABLE_PI=1` |
+| `mock` | 演示、测试、截图 | 安全的假模型，返回稳定演示结果 |
+
+### 内置 Agent 档案
+
+工作台支持一键套用 “provider + 角色 + 风格 + 安全档位” 组合：
+
+| 档案 | 默认 provider | 角色 | 安全档位 | 适用场景 |
+| --- | --- | --- | --- | --- |
+| 默认助理 | `opencode` | `general` | `safe` | 日常协作、轻量任务 |
+| 工程模式 | `opencode` | `engineer` | `power` | 改代码、跑工具、工程交付 |
+| 文档模式 | `openai` | `general` | `standard` | PPT、报价单、文档生成 |
+| 原型模式 | `openai` | `engineer` | `standard` | HTML 页面与原型产物 |
+| 研究模式 | `openai` | `general` | `safe` | 信息整理、低权限分析 |
+| 自定义 | 当前手动选择 | 手动 | 手动 | 按单次会话精细配置 |
+
+### 安全档位
+
+前端档位只是在服务端允许范围内“申请能力”；真正的上限仍由 `.env` 控制。
+
+| 档位 | Shell | Write | Browser | 适合什么 |
+| --- | --- | --- | --- | --- |
+| `safe` | 关 | 关 | 关 | 只读问答、信息整理 |
+| `standard` | 关 | 开 | 关 | 文档生成、文件产出 |
+| `power` | 开 | 开 | 开 | 管理员/工程场景的全能力模式 |
+| `custom` | 手动 | 手动 | 手动 | 精细控制每一项能力 |
+
+### 推荐怎么选 provider
+
+| 如果你想… | 推荐 provider | 原因 |
+| --- | --- | --- |
+| 稳定生成 PPT、报价单、海报、报检单、原型 | `openai` | 直接走内置文档/原型工具链，交付能力最完整 |
+| 在本地仓库里改代码、做工程任务 | `codex` | 更适合本地代码修改和仓库级工程工作流 |
+| 跑带审批风格的工程 Agent 流程 | `opencode` | 更贴合带审批/受控执行的工程协作流程 |
+| 使用国产/替代模型通道 | `glm` | 适合已经统一到 GLM 体系的部署环境 |
+| 把任务接到 OpenClaw 运行时里 | `openclaw` | 适合已经围绕 OpenClaw 做运营和资源管理的团队 |
+| 做演示、截图、无成本试用界面 | `mock` | 不依赖真实模型和密钥，适合本地演示与冒烟测试 |
+
+实用建议：
+
+- 做交付物、通用聊天，优先用 `openai`
+- 明确是“改这个仓库里的代码”，优先用 `codex`
+- 需要审批式工程流或外部 Agent 协作，优先用 `opencode`
+- 做演示、培训、README 截图，优先用 `mock`
+- 只有在基础设施、合规要求或现有工作流明确需要时，再切换到其他 provider
+
+## 工作台导航说明
+
+### 左侧主分区
+
+| 分区 | 内容 |
+| --- | --- |
+| 工作台 | 项目、需求、能力开关、AI+ 工具集、浏览器、ChatBI |
+| 技能 | 内置技能模板 + 团队 Prompt 技能 |
+| 历史 | 会话历史、产物文件、目录检索 |
+| 运行 | 当前会话运行轨迹、上下文与执行状态 |
+
+### 工作台页签
+
+| 页签 | 作用 |
+| --- | --- |
+| 项目维护 | 项目注册、目录树、README 预览、项目导入/发现 |
+| 需求维护 | 需求看板、跨团队交付、接单/拒单流转 |
+| 能力开关 | provider/档案选择、安全档位、shell/write/browser 开关 |
+| AI+工具集 | 视觉、媒体、内容、办公等 Pipeline 式能力 |
+| 智能问数 | 对本地或远程数据源进行自然语言问数 |
+| 浏览器 | 内置浏览器会话、页面跳转和截图 |
+
+## 服务拓扑图
+
+```mermaid
+flowchart TD
+  User[团队成员 / 管理员] --> Web[Vue 工作台]
+  Web --> Auth[认证与团队隔离]
+  Web --> Workspace[项目 / 需求 / 技能]
+  Web --> Chat[AI 对话控制台]
+  Web --> History[历史 / 文件 / 检索]
+  Web --> ChatBI[ChatBI 分析]
+  Web --> Ops[OpenClaw 运营中心]
+
+  Chat --> Agent[AgentService]
+  Agent --> Providers[OpenAI / Codex / OpenCode / Pi / Nanobot / Claude]
+  Agent --> Tools[Shell / Write / Browser / Docs / Prototype / Attachments]
+
+  Workspace --> Export[README 预览 / Markdown 导出]
+  Tools --> Deliverables[PPT / 报价 / 报检 / 海报 / 原型]
+  ChatBI --> DataSources[SQLite / 远程数据源]
+  Ops --> Gateway[OpenClaw 网关资源]
+
+  Auth --> DB[(SQLite / Postgres)]
+  History --> DB
+  Export --> Files[(outputs/ + file_records)]
+  Deliverables --> Files
+```
+
+## 主要服务模块
+
+- **`AuthService`**：管理员初始化、登录注册、团队切换与权限控制
+- **`AgentService`**：provider 路由、工具编排、会话回灌、事件追踪
+- **`DocService` + `services/docs/*`**：PPT、报价单、报检单、海报生成
+- **`PrototypeService`**：HTML 原型打包与在线预览
+- **`QueryEngine` + `services/chatbi/*`**：ChatBI 数据源管理、SQL 生成、执行与分析
+- **`OpenClawAdminService`**：OpenClaw 状态探测、资源同步、团队级配置管理
+- **`FeishuWebhookService` / `WecomService`**：飞书、企微回调接入与团队集成
+- **`TeamExportService` / `history_file_store`**：工作区导出、文件索引、历史检索
+
 ## 预览
 
 ![JetLinks AI · 企业版 OpenClaw 工作台](docs/images/github-hero.svg)
 
 ![JetLinks AI 界面截图](docs/images/screenshot.png)
+
+### 更多界面截图
+
+| 初始化与首次进入 | 工作区与 README 预览 |
+| --- | --- |
+| ![初始化页面](docs/images/screenshot-setup.png) | ![工作区页面](docs/images/screenshot-workspace.png) |
+
+| 内置技能模板中心 | AI 对话主界面 |
+| --- | --- |
+| ![技能中心](docs/images/screenshot-skills.png) | ![对话界面](docs/images/screenshot-chat.png) |
+
+| 智能问数（ChatBI） |
+| --- |
+| ![智能问数页面](docs/images/screenshot-chatbi.png) |
 
 本仓库包含完整前后端代码，适合自托管部署或二次开发扩展。
 
