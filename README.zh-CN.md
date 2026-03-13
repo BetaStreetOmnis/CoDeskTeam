@@ -26,6 +26,26 @@ JetLinks AI 是一个开源、可自托管的 **团队 AI 交付工作台**。
 - **OpenClaw 运营中心**：状态探测、一键同步、频道/插件/技能管理、团队级技能注册表
 - **默认更安全**：`shell`、`write`、`browser` 等高风险工具需显式开启
 
+## 预览
+
+![JetLinks AI · 企业版 OpenClaw 工作台](docs/images/github-hero.svg)
+
+![JetLinks AI 界面截图](docs/images/screenshot.png)
+
+### 更多界面截图
+
+| 初始化与首次进入 | 工作区与 README 预览 |
+| --- | --- |
+| ![初始化页面](docs/images/screenshot-setup.png) | ![工作区页面](docs/images/screenshot-workspace.png) |
+
+| 内置技能模板中心 | AI 对话主界面 |
+| --- | --- |
+| ![技能中心](docs/images/screenshot-skills.png) | ![对话界面](docs/images/screenshot-chat.png) |
+
+| 智能问数（ChatBI） |
+| --- |
+| ![智能问数页面](docs/images/screenshot-chatbi.png) |
+
 ## 平台功能总览
 
 | 模块 | 能做什么 | 主要接口 / 代码模块 |
@@ -161,26 +181,6 @@ flowchart TD
 - **`OpenClawAdminService`**：OpenClaw 状态探测、资源同步、团队级配置管理
 - **`FeishuWebhookService` / `WecomService`**：飞书、企微回调接入与团队集成
 - **`TeamExportService` / `history_file_store`**：工作区导出、文件索引、历史检索
-
-## 预览
-
-![JetLinks AI · 企业版 OpenClaw 工作台](docs/images/github-hero.svg)
-
-![JetLinks AI 界面截图](docs/images/screenshot.png)
-
-### 更多界面截图
-
-| 初始化与首次进入 | 工作区与 README 预览 |
-| --- | --- |
-| ![初始化页面](docs/images/screenshot-setup.png) | ![工作区页面](docs/images/screenshot-workspace.png) |
-
-| 内置技能模板中心 | AI 对话主界面 |
-| --- | --- |
-| ![技能中心](docs/images/screenshot-skills.png) | ![对话界面](docs/images/screenshot-chat.png) |
-
-| 智能问数（ChatBI） |
-| --- |
-| ![智能问数页面](docs/images/screenshot-chatbi.png) |
 
 本仓库包含完整前后端代码，适合自托管部署或二次开发扩展。
 

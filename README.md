@@ -26,6 +26,26 @@ You can think of it as an **enterprise-ready OpenClaw workspace**: chat-driven e
 - **OpenClaw operations center**: status probe, one-click sync, channel/plugin/skill management, team-scoped skill registry
 - **Secure by default**: high-risk tools (`shell`, `write`, `browser`) are disabled unless explicitly enabled
 
+## Preview
+
+![JetLinks AI · Enterprise OpenClaw Workspace](docs/images/github-hero.svg)
+
+![JetLinks AI UI](docs/images/screenshot.png)
+
+### More Screenshots
+
+| Setup & onboarding | Workspace & README preview |
+| --- | --- |
+| ![Setup](docs/images/screenshot-setup.png) | ![Workspace](docs/images/screenshot-workspace.png) |
+
+| Built-in skills center | AI chat workspace |
+| --- | --- |
+| ![Skills](docs/images/screenshot-skills.png) | ![Chat](docs/images/screenshot-chat.png) |
+
+| ChatBI workspace |
+| --- |
+| ![ChatBI](docs/images/screenshot-chatbi.png) |
+
 ## Platform Capability Overview
 
 | Domain | What users can do | Key routes / modules |
@@ -169,26 +189,6 @@ flowchart TD
 - **Data**: SQLite by default, Postgres supported
 - **Artifacts**: generated files are stored in `outputs/` or the configured runtime directory
 - **Optional upstream integrations**: OpenClaw / OpenCode / Pi via vendored submodules
-
-## Preview
-
-![JetLinks AI · Enterprise OpenClaw Workspace](docs/images/github-hero.svg)
-
-![JetLinks AI UI](docs/images/screenshot.png)
-
-### More Screenshots
-
-| Setup & onboarding | Workspace & README preview |
-| --- | --- |
-| ![Setup](docs/images/screenshot-setup.png) | ![Workspace](docs/images/screenshot-workspace.png) |
-
-| Built-in skills center | AI chat workspace |
-| --- | --- |
-| ![Skills](docs/images/screenshot-skills.png) | ![Chat](docs/images/screenshot-chat.png) |
-
-| ChatBI workspace |
-| --- |
-| ![ChatBI](docs/images/screenshot-chatbi.png) |
 
 ## Quick Start
 
