@@ -34,9 +34,11 @@ class Settings:
     openai_api_key: str | None
     openai_base_url: str
     openai_verify_ssl: bool
+    openai_image_model: str
     glm_api_key: str | None
     glm_base_url: str
     glm_model: str
+    glm_image_model: str
     public_base_url: str
     workspace_root: Path
     projects_roots: list[Path]
@@ -187,9 +189,11 @@ def load_settings() -> Settings:
         openai_api_key=_raw_env_str("OPENAI_API_KEY", None),
         openai_base_url=_raw_env_str("OPENAI_BASE_URL", "https://api.openai.com/v1") or "https://api.openai.com/v1",
         openai_verify_ssl=env_bool("OPENAI_VERIFY_SSL", True),
+        openai_image_model=env_str("OPENAI_IMAGE_MODEL", "gpt-image-1") or "gpt-image-1",
         glm_api_key=_raw_env_str("GLM_API_KEY", None),
         glm_base_url=_raw_env_str("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4") or "https://open.bigmodel.cn/api/paas/v4",
         glm_model=env_str("GLM_MODEL", "glm-4.5") or "glm-4.5",
+        glm_image_model=env_str("GLM_IMAGE_MODEL", "cogview-3-flash") or "cogview-3-flash",
         public_base_url=public_base_url,
         workspace_root=workspace_root,
         projects_roots=projects_roots,

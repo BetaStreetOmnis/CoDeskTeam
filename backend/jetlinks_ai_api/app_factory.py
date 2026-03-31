@@ -28,6 +28,7 @@ from .routers import (
     meta,
     openai_proxy,
     prototype,
+    skill_pipelines,
     skills,
     team,
     team_integrations,
@@ -66,6 +67,7 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(browser.router, prefix="/api")
     app.include_router(prototype.router, prefix="/api")
     app.include_router(skills.router, prefix="/api")
+    app.include_router(skill_pipelines.router, prefix="/api")
     app.include_router(auth.router, prefix="/api")
     app.include_router(team.router, prefix="/api")
     app.include_router(team_integrations.router, prefix="/api")
