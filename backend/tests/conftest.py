@@ -51,6 +51,9 @@ def _start_postgres_container() -> PostgresContainer:
         if not image:
             image = "postgres:16-alpine"
 
+    if subprocess.run(["docker", "version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False).returncode != 0:
+        pytest.skip("Docker is unavailable; skipping Postgres-backed backend tests")
+
     try:
         subprocess.run(
             [
@@ -76,9 +79,11 @@ def _start_postgres_container() -> PostgresContainer:
             timeout=120,
         )
     except subprocess.TimeoutExpired:
-        raise pytest.SkipTest("Docker image pull/run timed out (need a local Postgres image or faster network)")
+        pytest.skip("Docker image pull/run timed out (need a local Postgres image or faster network)")
     except subprocess.CalledProcessError as e:
-        raise pytest.SkipTest(f"Docker run failed: {e}")
+        pytest.skip(f"Docker run failed: {e}")
+    except FileNotFoundError:
+        pytest.skip("Docker CLI not found; skipping Postgres-backed backend tests")
 
     port_out = subprocess.check_output(["docker", "port", container_name, "5432/tcp"], text=True).strip()
     # Example outputs: "0.0.0.0:49153" or ":::49153"
@@ -124,8 +129,8 @@ def pg_url() -> Iterator[str]:
         subprocess.run(["docker", "stop", container.name], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _apply_migrations(pg_url: str) -> None:
+@pytest.fixture(scope="session")
+def migrated_pg_url(pg_url: str) -> str:
     os.environ["JETLINKS_AI_DB_URL"] = pg_url
 
     from alembic import command
@@ -133,11 +138,17 @@ def _apply_migrations(pg_url: str) -> None:
 
     cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     command.upgrade(cfg, "head")
+    return pg_url
 
 
 @pytest.fixture(autouse=True)
-def _clean_db(pg_url: str) -> None:
+def _clean_db(request) -> None:  # noqa: ANN001
+    if not ({"client", "app", "pg_url", "migrated_pg_url"} & set(request.fixturenames)):
+        return
+
     import psycopg
+
+    pg_url = request.getfixturevalue("migrated_pg_url")
 
     # Keep alembic_version; wipe everything else.
     tables = [
@@ -168,8 +179,8 @@ def _clean_db(pg_url: str) -> None:
 
 
 @pytest.fixture
-def app(pg_url: str, tmp_path: Path):
-    os.environ["JETLINKS_AI_DB_URL"] = pg_url
+def app(migrated_pg_url: str, tmp_path: Path):
+    os.environ["JETLINKS_AI_DB_URL"] = migrated_pg_url
     os.environ["JETLINKS_AI_DATA_DIR"] = str(tmp_path / "data")
     os.environ["JETLINKS_AI_OUTPUTS_DIR"] = str(tmp_path / "outputs")
     os.environ["JETLINKS_AI_JWT_SECRET"] = "test-jwt-secret-0123456789abcdef0123456789abcdef0123456789abcdef"

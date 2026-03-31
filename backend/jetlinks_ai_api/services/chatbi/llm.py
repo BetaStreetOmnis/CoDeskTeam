@@ -11,12 +11,17 @@ class ChatbiLlmConfig:
     base_url: str
     api_key: str | None
     model: str
+    verify_ssl: bool = True
 
 
 class ChatbiLLM:
     def __init__(self, cfg: ChatbiLlmConfig) -> None:
         self._cfg = cfg
-        self._provider = OpenAiProvider(api_key=cfg.api_key, base_url=cfg.base_url)
+        self._provider = OpenAiProvider(
+            api_key=cfg.api_key,
+            base_url=cfg.base_url,
+            verify_ssl=cfg.verify_ssl,
+        )
 
     async def complete_text(self, *, system: str, user: str) -> str:
         res = await self._provider.complete(

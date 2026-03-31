@@ -137,6 +137,13 @@ def _is_transient_openclaw_error(text: str) -> bool:
     return any(m in t for m in markers)
 
 
+def _log_openclaw(message: str) -> None:
+    text = (message or "").strip()
+    if not text:
+        return
+    print(f"[jetlinks-ai][openclaw] {text}")
+
+
 @dataclass(frozen=True)
 class OpenClawChatResult:
     assistant: str
@@ -215,7 +222,15 @@ class OpenClawService:
                     proc.kill()
                 except Exception:
                     pass
+                elapsed_ms = int((asyncio.get_event_loop().time() - started) * 1000)
                 last_err = f"OpenClaw timed out after {self._timeout_seconds()}s"
+                _log_openclaw(
+                    "timeout "
+                    f"attempt={attempt}/{self._max_attempts()} "
+                    f"session_id={session.session_id} "
+                    f"timeout_s={self._timeout_seconds()} "
+                    f"elapsed_ms={elapsed_ms}"
+                )
                 if attempt < self._max_attempts():
                     await asyncio.sleep(0.6)
                     continue
@@ -224,10 +239,28 @@ class OpenClawService:
             stdout = stdout_b.decode("utf-8", errors="ignore").strip()
             stderr = stderr_b.decode("utf-8", errors="ignore").strip()
             if proc.returncode == 0:
+                if attempt > 1:
+                    elapsed_ms = int((asyncio.get_event_loop().time() - started) * 1000)
+                    _log_openclaw(
+                        "recovered "
+                        f"attempt={attempt}/{self._max_attempts()} "
+                        f"session_id={session.session_id} "
+                        f"elapsed_ms={elapsed_ms}"
+                    )
                 break
 
             err = _best_error(stderr, stdout)
+            elapsed_ms = int((asyncio.get_event_loop().time() - started) * 1000)
             last_err = f"OpenClaw command failed (exit={proc.returncode}): {err}"
+            _log_openclaw(
+                "failure "
+                f"attempt={attempt}/{self._max_attempts()} "
+                f"session_id={session.session_id} "
+                f"exit={proc.returncode} "
+                f"elapsed_ms={elapsed_ms} "
+                f"transient={_is_transient_openclaw_error(err)} "
+                f"error={_truncate(err, 500).replace(chr(10), ' | ')}"
+            )
             if attempt < self._max_attempts() and _is_transient_openclaw_error(err):
                 await asyncio.sleep(0.6)
                 continue
@@ -255,5 +288,6 @@ class OpenClawService:
             }
         ]
         if stderr:
+            _log_openclaw(f"warning session_id={session.session_id} stderr={_truncate(stderr, 500).replace(chr(10), ' | ')}")
             events.insert(0, {"type": "openclaw_warning", "message": _truncate(stderr, 1200)})
         return OpenClawChatResult(assistant=assistant, openclaw_session_id=openclaw_session_id, events=events)

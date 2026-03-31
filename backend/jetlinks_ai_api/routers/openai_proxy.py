@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import time
 from typing import Any, AsyncIterator
 from uuid import uuid4
@@ -13,23 +12,13 @@ from fastapi.responses import Response, StreamingResponse
 from starlette.background import BackgroundTask
 
 from ..deps import get_settings
+from ..openai_compat import openai_base_candidates
 
 
 router = APIRouter(tags=["openai-proxy"])
-
-_V1_RE = re.compile(r"/v1(?:$|/)")
 _DEFAULT_INSTRUCTIONS = "You are a helpful assistant."
-_TOOL_RESULT_START = "<<<AISTAFF_TOOL_RESULT>>>"
-_TOOL_RESULT_END = "<<<END_AISTAFF_TOOL_RESULT>>>"
-
-
-def _normalize_openai_base_url(base_url: str) -> str:
-    base = (base_url or "").strip().rstrip("/")
-    if not base:
-        return base
-    if _V1_RE.search(base):
-        return base
-    return f"{base}/v1"
+_TOOL_RESULT_START = "<<<JETLINKS_AI_TOOL_RESULT>>>"
+_TOOL_RESULT_END = "<<<END_JETLINKS_AI_TOOL_RESULT>>>"
 
 
 def _is_localhost(host: str | None) -> bool:
@@ -316,10 +305,9 @@ async def proxy_openai_responses(request: Request, settings=Depends(get_settings
     if isinstance(payload.get("tools"), list):
         payload["tools"] = _sanitize_strings(payload["tools"])
 
-    upstream_base = _normalize_openai_base_url(settings.openai_base_url)
-    if not upstream_base:
+    upstream_bases = openai_base_candidates(settings.openai_base_url)
+    if not upstream_bases:
         raise HTTPException(status_code=500, detail="Missing OPENAI_BASE_URL")
-    upstream_url = f"{upstream_base}/responses"
 
     api_key = (settings.openai_api_key or "").strip()
     if not api_key:
@@ -331,11 +319,30 @@ async def proxy_openai_responses(request: Request, settings=Depends(get_settings
     else:
         headers = {"Authorization": f"Bearer {api_key}"}
 
-    client = httpx.AsyncClient(timeout=httpx.Timeout(300.0))
+    client = httpx.AsyncClient(timeout=httpx.Timeout(300.0), verify=settings.openai_verify_ssl)
     # Keep the context manager alive for the whole streaming response.
     # Otherwise it may get GC'd and close the upstream stream early.
-    upstream_cm = client.stream("POST", upstream_url, headers=headers, json=payload)
-    res = await upstream_cm.__aenter__()
+    upstream_cm = None
+    res = None
+    last_error: Exception | None = None
+    for upstream_base in upstream_bases:
+        candidate_cm = client.stream("POST", f"{upstream_base}/responses", headers=headers, json=payload)
+        try:
+            candidate_res = await candidate_cm.__aenter__()
+        except Exception as exc:
+            last_error = exc
+            continue
+        if candidate_res.status_code == 404:
+            await candidate_cm.__aexit__(None, None, None)
+            continue
+        upstream_cm = candidate_cm
+        res = candidate_res
+        break
+    if upstream_cm is None or res is None:
+        await client.aclose()
+        if last_error:
+            raise last_error
+        raise HTTPException(status_code=502, detail="OpenAI upstream /responses endpoint not found")
 
     if res.status_code >= 400:
         raw = (await res.aread()).decode("utf-8", errors="replace")
@@ -419,10 +426,9 @@ async def proxy_openai_chat_completions(request: Request, settings=Depends(get_s
     if tools_payload:
         tools_payload = _sanitize_strings(tools_payload)
 
-    upstream_base = _normalize_openai_base_url(settings.openai_base_url)
-    if not upstream_base:
+    upstream_bases = openai_base_candidates(settings.openai_base_url)
+    if not upstream_bases:
         raise HTTPException(status_code=500, detail="Missing OPENAI_BASE_URL")
-    upstream_url = f"{upstream_base}/responses"
 
     api_key = (settings.openai_api_key or "").strip()
     if not api_key:
@@ -448,19 +454,39 @@ async def proxy_openai_chat_completions(request: Request, settings=Depends(get_s
     chat_id = f"chatcmpl_{uuid4().hex}"
     created = int(time.time())
 
-    client = httpx.AsyncClient(timeout=httpx.Timeout(300.0))
+    client = httpx.AsyncClient(timeout=httpx.Timeout(300.0), verify=settings.openai_verify_ssl)
     try:
-        async with client.stream("POST", upstream_url, headers=headers, json=responses_payload) as res:
-            if res.status_code >= 400:
-                raw = (await res.aread()).decode("utf-8", errors="replace")
-                raise HTTPException(status_code=res.status_code, detail=_extract_json_detail(raw))
+        response_obj: dict | None = None
+        last_error: Exception | None = None
+        for upstream_base in upstream_bases:
+            try:
+                async with client.stream(
+                    "POST",
+                    f"{upstream_base}/responses",
+                    headers=headers,
+                    json=responses_payload,
+                ) as res:
+                    if res.status_code == 404:
+                        continue
+                    if res.status_code >= 400:
+                        raw = (await res.aread()).decode("utf-8", errors="replace")
+                        raise HTTPException(status_code=res.status_code, detail=_extract_json_detail(raw))
 
-            ctype = (res.headers.get("content-type") or "").lower()
-            response_obj: dict | None
-            if "text/event-stream" in ctype:
-                response_obj = await _collect_sse_response(res)
-            else:
-                response_obj = res.json()
+                    ctype = (res.headers.get("content-type") or "").lower()
+                    if "text/event-stream" in ctype:
+                        response_obj = await _collect_sse_response(res)
+                    else:
+                        response_obj = res.json()
+                    break
+            except HTTPException:
+                raise
+            except Exception as exc:
+                last_error = exc
+                continue
+        if response_obj is None:
+            if last_error:
+                raise last_error
+            raise HTTPException(status_code=502, detail="OpenAI upstream /responses endpoint not found")
 
         if not isinstance(response_obj, dict):
             raise HTTPException(status_code=502, detail="Upstream returned invalid response")

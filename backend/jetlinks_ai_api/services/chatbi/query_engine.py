@@ -522,6 +522,7 @@ class QueryEngine:
                 base_url=settings.openai_base_url,
                 api_key=settings.openai_api_key,
                 model=settings.model,
+                verify_ssl=settings.openai_verify_ssl,
             )
         )
 

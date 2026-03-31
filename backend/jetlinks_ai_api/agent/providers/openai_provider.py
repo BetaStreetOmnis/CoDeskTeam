@@ -9,12 +9,12 @@ import re
 
 import httpx
 
+from ...openai_compat import openai_base_candidates
 from ..types import ChatMessage, ToolCall
 from ..tools.base import ToolDefinition
 from .base import ModelResponse
 
 
-_V1_RE = re.compile(r"/v1(?:$|/)")
 _IMAGE_FILE_ID_RE = re.compile(r"^[a-f0-9]{32}\\.(png|jpe?g|webp|gif)$", re.IGNORECASE)
 _IMAGE_MIME_BY_EXT = {
     ".png": "image/png",
@@ -26,21 +26,8 @@ _IMAGE_MIME_BY_EXT = {
 _MAX_INPUT_IMAGES = 4
 _MAX_IMAGE_BYTES = 8 * 1024 * 1024
 _STRICT_GATEWAY_HINTS = {"tabcode"}
-_TOOL_RESULT_START = "<<<AISTAFF_TOOL_RESULT>>>"
-_TOOL_RESULT_END = "<<<END_AISTAFF_TOOL_RESULT>>>"
-
-
-def _normalize_openai_base_url(base_url: str) -> str:
-    base = (base_url or "").strip().rstrip("/")
-    if not base:
-        return base
-    # GLM (BigModel) OpenAI-compatible endpoint uses /api/paas/v4 directly.
-    # If we append /v1 here, requests become /v4/v1/* and will 404.
-    if "open.bigmodel.cn/api/paas/v4" in base.lower():
-        return base
-    if _V1_RE.search(base):
-        return base
-    return f"{base}/v1"
+_TOOL_RESULT_START = "<<<JETLINKS_AI_TOOL_RESULT>>>"
+_TOOL_RESULT_END = "<<<END_JETLINKS_AI_TOOL_RESULT>>>"
 
 
 def _escape_newlines(value: str) -> str:
@@ -294,14 +281,15 @@ class OpenAiProvider:
     name: str = "openai"
     api_key: str | None = None
     base_url: str = "https://api.openai.com/v1"
+    verify_ssl: bool = True
     outputs_dir: Path | None = None
 
     async def complete(self, *, model: str, messages: list[ChatMessage], tools: list[ToolDefinition]) -> ModelResponse:
         if not self.api_key:
             raise ValueError("Missing OPENAI_API_KEY")
 
-        base = _normalize_openai_base_url(self.base_url)
-        if not base:
+        bases = openai_base_candidates(self.base_url)
+        if not bases:
             raise ValueError("Missing OPENAI_BASE_URL")
 
         instructions = _messages_to_instructions(messages)
@@ -343,7 +331,7 @@ class OpenAiProvider:
             for t in tools
         ]
 
-        strict_gateway = _likely_strict_gateway(base)
+        strict_gateway = any(_likely_strict_gateway(base) for base in bases)
 
         def _responses_payload(*, strict: bool) -> dict:
             payload: dict = {
@@ -356,25 +344,40 @@ class OpenAiProvider:
             }
             return payload
 
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=120, verify=self.verify_ssl) as client:
             async def _call_responses(*, strict: bool) -> tuple[int, dict | None]:
-                async with client.stream(
-                    "POST",
-                    f"{base}/responses",
-                    headers={"Authorization": f"Bearer {self.api_key}"},
-                    json=_responses_payload(strict=strict),
-                ) as res:
-                    if res.status_code == 404:
-                        return res.status_code, None
-                    if res.status_code >= 400:
-                        text = (await res.aread()).decode("utf-8", errors="replace")
-                        raise RuntimeError(f"OpenAI error {res.status_code}: {text}")
+                saw_404 = False
+                last_error: Exception | None = None
+                for base in bases:
+                    try:
+                        async with client.stream(
+                            "POST",
+                            f"{base}/responses",
+                            headers={"Authorization": f"Bearer {self.api_key}"},
+                            json=_responses_payload(strict=strict),
+                        ) as res:
+                            if res.status_code == 404:
+                                saw_404 = True
+                                continue
+                            if res.status_code >= 400:
+                                text = (await res.aread()).decode("utf-8", errors="replace")
+                                raise RuntimeError(f"OpenAI error {res.status_code}: {text}")
 
-                    ctype = (res.headers.get("content-type") or "").lower()
-                    if "text/event-stream" in ctype:
-                        return res.status_code, await _collect_sse_response(res)
-                    # Some gateways may ignore stream=true and return JSON.
-                    return res.status_code, res.json()
+                            ctype = (res.headers.get("content-type") or "").lower()
+                            if "text/event-stream" in ctype:
+                                return res.status_code, await _collect_sse_response(res)
+                            # Some gateways may ignore stream=true and return JSON.
+                            return res.status_code, res.json()
+                    except RuntimeError:
+                        raise
+                    except Exception as exc:  # pragma: no cover - network/runtime edge path
+                        last_error = exc
+                        continue
+                if saw_404:
+                    return 404, None
+                if last_error:
+                    raise last_error
+                return 404, None
 
             status, res_data = await _call_responses(strict=strict_gateway)
             # If the gateway returned SSE but we couldn't parse a final response object,
@@ -386,22 +389,30 @@ class OpenAiProvider:
 
             if status == 404:
                 # Fallback to Chat Completions API.
-                res = await client.post(
-                    f"{base}/chat/completions",
-                    headers={"Authorization": f"Bearer {self.api_key}"},
-                    json={
-                        "model": model,
-                        "messages": [m.to_openai() for m in messages],
-                        "tools": tools_payload_chat,
-                        "tool_choice": "auto",
-                    },
-                )
+                last_error: Exception | None = None
+                data: dict | None = None
+                for base in bases:
+                    res = await client.post(
+                        f"{base}/chat/completions",
+                        headers={"Authorization": f"Bearer {self.api_key}"},
+                        json={
+                            "model": model,
+                            "messages": [m.to_openai() for m in messages],
+                            "tools": tools_payload_chat,
+                            "tool_choice": "auto",
+                        },
+                    )
 
-                text = res.text
-                if res.status_code >= 400:
-                    raise RuntimeError(f"OpenAI error {res.status_code}: {text}")
-
-                data = res.json()
+                    text = res.text
+                    if res.status_code == 404:
+                        last_error = RuntimeError(f"OpenAI error {res.status_code}: {text}")
+                        continue
+                    if res.status_code >= 400:
+                        raise RuntimeError(f"OpenAI error {res.status_code}: {text}")
+                    data = res.json()
+                    break
+                if data is None:
+                    raise last_error or RuntimeError("OpenAI Chat Completions endpoint not found")
 
                 choice = (data.get("choices") or [{}])[0]
                 message = choice.get("message") or {}

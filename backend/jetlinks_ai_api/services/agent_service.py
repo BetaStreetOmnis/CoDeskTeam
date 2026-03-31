@@ -62,6 +62,24 @@ _PROTO_EXPLICIT_RE = re.compile(r"(原型|prototype|h5\\s*原型|html\\s*(原型
 _PROTO_MODE_MARKER = "【PROTO_MODE】"
 
 
+def _should_fallback_openclaw_error(text: str) -> bool:
+    value = (text or "").lower()
+    if not value:
+        return False
+    markers = (
+        "no stderr/stdout",
+        "gateway closed",
+        "模型鉴权失败",
+        "timed out",
+        "connection error",
+        "econnreset",
+        "abnormal closure",
+        "cli not found",
+        "command not found",
+    )
+    return any(marker in value for marker in markers)
+
+
 def _runtime_system_prompt(*, provider: str, model: str, workspace: Path, tool_ctx: ToolContext) -> str:
     now = datetime.now(timezone.utc).astimezone()
     enabled = []
@@ -368,6 +386,7 @@ class AgentService:
             return OpenAiProvider(
                 api_key=self._settings.glm_api_key,
                 base_url=self._settings.glm_base_url,
+                verify_ssl=self._settings.openai_verify_ssl,
                 outputs_dir=self._settings.outputs_dir,
             )
         if name != "openai":
@@ -375,6 +394,7 @@ class AgentService:
         return OpenAiProvider(
             api_key=self._settings.openai_api_key,
             base_url=self._settings.openai_base_url,
+            verify_ssl=self._settings.openai_verify_ssl,
             outputs_dir=self._settings.outputs_dir,
         )
 
@@ -622,6 +642,7 @@ class AgentService:
                 provider_impl = OpenAiProvider(
                     api_key=self._settings.openai_api_key,
                     base_url=self._settings.openai_base_url,
+                    verify_ssl=self._settings.openai_verify_ssl,
                     outputs_dir=self._settings.outputs_dir,
                 )
 
@@ -770,7 +791,7 @@ class AgentService:
                         openclaw_session_id=session.session_id,
                         events=[{"type": "openclaw_blocked", "reason": "sensitive"}],
                     )
-                elif "no stderr/stdout" in text or "gateway closed" in text or "模型鉴权失败" in text:
+                elif _should_fallback_openclaw_error(text):
                     fallback_provider: str | None = None
                     if self._settings.glm_api_key:
                         fallback_provider = "glm"
@@ -1093,6 +1114,7 @@ class AgentService:
                 provider_impl = OpenAiProvider(
                     api_key=self._settings.openai_api_key,
                     base_url=self._settings.openai_base_url,
+                    verify_ssl=self._settings.openai_verify_ssl,
                     outputs_dir=self._settings.outputs_dir,
                 )
 
@@ -1262,6 +1284,7 @@ class AgentService:
                 provider_impl = OpenAiProvider(
                     api_key=self._settings.openai_api_key,
                     base_url=self._settings.openai_base_url,
+                    verify_ssl=self._settings.openai_verify_ssl,
                     outputs_dir=self._settings.outputs_dir,
                 )
 
@@ -1553,6 +1576,7 @@ class AgentService:
                 provider_impl = OpenAiProvider(
                     api_key=self._settings.openai_api_key,
                     base_url=self._settings.openai_base_url,
+                    verify_ssl=self._settings.openai_verify_ssl,
                     outputs_dir=self._settings.outputs_dir,
                 )
 

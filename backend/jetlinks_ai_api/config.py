@@ -33,6 +33,7 @@ class Settings:
     model: str
     openai_api_key: str | None
     openai_base_url: str
+    openai_verify_ssl: bool
     glm_api_key: str | None
     glm_base_url: str
     glm_model: str
@@ -185,6 +186,7 @@ def load_settings() -> Settings:
         model=env_str("MODEL", "gpt-5.2") or "gpt-5.2",
         openai_api_key=_raw_env_str("OPENAI_API_KEY", None),
         openai_base_url=_raw_env_str("OPENAI_BASE_URL", "https://api.openai.com/v1") or "https://api.openai.com/v1",
+        openai_verify_ssl=env_bool("OPENAI_VERIFY_SSL", True),
         glm_api_key=_raw_env_str("GLM_API_KEY", None),
         glm_base_url=_raw_env_str("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4") or "https://open.bigmodel.cn/api/paas/v4",
         glm_model=env_str("GLM_MODEL", "glm-4.5") or "glm-4.5",

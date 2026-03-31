@@ -131,7 +131,11 @@ async def ai_draft_team_skill(
     if not getattr(settings, "openai_api_key", None):
         raise HTTPException(status_code=400, detail="OPENAI_API_KEY 未配置")
 
-    provider = OpenAiProvider(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
+    provider = OpenAiProvider(
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url,
+        verify_ssl=settings.openai_verify_ssl,
+    )
     used_model = (req.model or settings.model or "").strip() or "gpt-5.2"
 
     async def _noop_handler(_args: BaseModel, _ctx):  # noqa: ANN001
