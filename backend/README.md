@@ -21,6 +21,19 @@ cd backend
 uv run uvicorn jetlinks_ai_api.main:app --reload --port 8000
 ```
 
+## OpenAI 兼容网关
+
+- `OPENAI_BASE_URL` 可以直接指向外部网关，也可以指向本地 JetLinks AI 代理。
+- 对 tabcode 这类网关，后端会优先尝试原始 base，再自动补 `/v1` 兜底。
+- 如果上游证书临时异常，可将 `OPENAI_VERIFY_SSL=0` 作为运维兜底，恢复后建议改回默认值。
+- OpenClaw 与 JetLinks AI 部署在同机时，建议让 OpenClaw 指向本地代理：
+
+```bash
+OPENAI_BASE_URL=http://127.0.0.1:8001/openai/v1
+```
+
+这样 OpenClaw 不需要自己兼容 `/responses` 与 `/chat/completions` 差异，统一由 JetLinks AI 代理层处理。
+
 ## 数据库
 
 - 默认：SQLite（`JETLINKS_AI_DB_PATH`，默认 `../.jetlinks-ai/jetlinks_ai.db`；如检测到旧库则兼容 `../.aistaff/aistaff.db`）
