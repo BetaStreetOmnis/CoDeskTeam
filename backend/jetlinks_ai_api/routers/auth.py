@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
@@ -14,6 +15,57 @@ from ..time_utils import UTC
 
 
 router = APIRouter(tags=["auth"])
+
+
+async def _ensure_public_demo_identity(*, settings, db) -> tuple[dict, dict]:
+    team_name = str(getattr(settings, "public_demo_team_name", "") or "公开演示团队").strip() or "公开演示团队"
+    email = str(getattr(settings, "public_demo_user_email", "") or "demo@jetlinks.local").strip().lower() or "demo@jetlinks.local"
+    user_name = str(getattr(settings, "public_demo_user_name", "") or "Demo Visitor").strip() or "Demo Visitor"
+    now = utc_now_iso()
+    changed = False
+
+    team_row = await fetchone(db, "SELECT id, name FROM teams WHERE name = ? ORDER BY id ASC LIMIT 1", (team_name,))
+    team = row_to_dict(team_row)
+    if not team:
+        cur = await db.execute("INSERT INTO teams(name, created_at) VALUES (?, ?)", (team_name, now))
+        team = {"id": int(cur.lastrowid or 0), "name": team_name}
+        changed = True
+
+    user_row = await fetchone(db, "SELECT id, email, name FROM users WHERE email = ?", (email,))
+    user = row_to_dict(user_row)
+    if not user:
+        cur = await db.execute(
+            "INSERT INTO users(email, name, password_hash, created_at) VALUES (?, ?, ?, ?)",
+            (email, user_name, hash_password(secrets.token_urlsafe(24)), now),
+        )
+        user = {"id": int(cur.lastrowid or 0), "email": email, "name": user_name}
+        changed = True
+
+    membership_row = await fetchone(
+        db,
+        "SELECT role FROM memberships WHERE user_id = ? AND team_id = ?",
+        (int(user["id"]), int(team["id"])),
+    )
+    membership = row_to_dict(membership_row)
+    if not membership:
+        await db.execute(
+            "INSERT INTO memberships(user_id, team_id, role, created_at) VALUES (?, ?, ?, ?)",
+            (int(user["id"]), int(team["id"]), "member", now),
+        )
+        changed = True
+
+    if changed:
+        await db.commit()
+
+    try:
+        await ensure_default_team_skills(db, team_id=int(team["id"]))
+    except Exception:
+        pass
+
+    return (
+        {"id": int(user["id"]), "email": email, "name": str(user.get("name") or user_name)},
+        {"id": int(team["id"]), "name": str(team.get("name") or team_name), "role": "member"},
+    )
 
 
 class AuthStatusResponse(BaseModel):
@@ -57,6 +109,28 @@ class AuthResponse(BaseModel):
     user: dict
     teams: list[dict]
     active_team: dict
+
+
+@router.get("/auth/demo", response_model=AuthResponse)
+async def public_demo_auth(settings=Depends(get_settings), db=Depends(get_db)) -> AuthResponse:  # noqa: ANN001
+    if not bool(getattr(settings, "public_demo_enabled", False)):
+        raise HTTPException(status_code=404, detail="公开演示未启用")
+
+    user, active_team = await _ensure_public_demo_identity(settings=settings, db=db)
+    token = create_access_token(
+        settings=settings,
+        user_id=int(user["id"]),
+        email=str(user["email"]),
+        team_id=int(active_team["id"]),
+        team_role=str(active_team["role"] or "member"),
+        public_demo=True,
+    )
+    return AuthResponse(
+        access_token=token,
+        user=user,
+        teams=[active_team],
+        active_team=active_team,
+    )
 
 
 @router.post("/auth/setup", response_model=AuthResponse)
@@ -400,7 +474,7 @@ async def me(
     db=Depends(get_db),  # noqa: ANN001
     settings=Depends(get_settings),  # noqa: ANN001
 ) -> MeResponse:
-    is_super = is_super_user(settings, str(user.email))
+    is_super = bool(user.is_super_admin)
     if is_super:
         teams_rows = await fetchall(
             db,
@@ -449,7 +523,7 @@ async def switch_team(
     settings=Depends(get_settings),  # noqa: ANN001
     db=Depends(get_db),  # noqa: ANN001
 ) -> AuthResponse:
-    is_super = is_super_user(settings, str(user.email))
+    is_super = bool(user.is_super_admin)
 
     mem_row = await fetchone(
         db,

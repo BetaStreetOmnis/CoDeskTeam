@@ -6,12 +6,13 @@ import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
-from .db import init_db
+from .db import fetchone, init_db, open_db
 from .env_utils import env_str
+from .middleware.public_demo_rate_limit import PublicDemoRateLimitMiddleware
 from .output_cleanup import cleanup_outputs_dir
 from .services.openclaw_runtime import get_openclaw_runtime
 from .routers import (
@@ -59,6 +60,7 @@ def create_app(settings: Settings) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(PublicDemoRateLimitMiddleware, settings=settings)
 
     app.include_router(meta.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
@@ -83,6 +85,17 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/health")
     def health() -> dict:
         return {"ok": True}
+
+    @app.get("/ready")
+    async def ready() -> dict:
+        async with open_db(settings) as db:
+            row = await fetchone(db, "SELECT 1 AS ok")
+        return {
+            "ok": bool(row),
+            "db": "ok",
+            "data_dir": str(settings.data_dir),
+            "outputs_dir": str(settings.outputs_dir),
+        }
 
     _mount_chatbi(app, settings)
     _mount_ui(app, settings)
@@ -160,5 +173,15 @@ def _mount_ui_static(app: FastAPI, settings: Settings) -> bool:
     index = dist / "index.html"
     if not index.exists():
         return False
+
+    if bool(getattr(settings, "public_demo_enabled", False)):
+        demo_route = str(getattr(settings, "public_demo_route", "/demo") or "/demo").rstrip("/") or "/demo"
+
+        async def public_demo_index() -> FileResponse:
+            return FileResponse(index)
+
+        app.add_api_route(demo_route, public_demo_index, methods=["GET"], include_in_schema=False)
+        app.add_api_route(f"{demo_route}/{{path:path}}", public_demo_index, methods=["GET"], include_in_schema=False)
+
     app.mount("/", StaticFiles(directory=str(dist), html=True), name="ui")
     return True

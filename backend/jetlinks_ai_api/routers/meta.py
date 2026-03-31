@@ -4,7 +4,8 @@ import shutil
 
 from fastapi import APIRouter, Depends
 
-from ..deps import get_settings
+from ..db import fetchone
+from ..deps import get_db, get_settings
 
 
 router = APIRouter(tags=["meta"])
@@ -25,8 +26,23 @@ def meta(settings=Depends(get_settings)) -> dict:  # noqa: ANN001
         providers.append("pi")
     return {
         "providers": providers,
+        "public_demo": {
+            "enabled": bool(getattr(settings, "public_demo_enabled", False)),
+            "route": str(getattr(settings, "public_demo_route", "/demo") or "/demo"),
+        },
         "pi": {
             "enabled": bool(getattr(settings, "enable_pi", False)),
             "backend": str(getattr(settings, "pi_backend", "auto")),
         },
+    }
+
+
+@router.get("/ready")
+async def ready(settings=Depends(get_settings), db=Depends(get_db)) -> dict:  # noqa: ANN001
+    row = await fetchone(db, "SELECT 1 AS ok")
+    return {
+        "ok": bool(row),
+        "db": "ok",
+        "data_dir": str(settings.data_dir),
+        "outputs_dir": str(settings.outputs_dir),
     }

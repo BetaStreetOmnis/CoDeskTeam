@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,6 +41,21 @@ class Settings:
     glm_model: str
     glm_image_model: str
     public_base_url: str
+    public_demo_enabled: bool
+    public_demo_route: str
+    public_demo_team_name: str
+    public_demo_user_email: str
+    public_demo_user_name: str
+    public_demo_auth_window_seconds: int
+    public_demo_auth_max_requests: int
+    public_demo_write_window_seconds: int
+    public_demo_write_max_requests: int
+    public_demo_upload_window_seconds: int
+    public_demo_upload_max_requests: int
+    public_demo_pipeline_window_seconds: int
+    public_demo_pipeline_max_requests: int
+    public_demo_audit_enabled: bool
+    public_demo_audit_log_path: Path
     workspace_root: Path
     projects_roots: list[Path]
     workspace_layout: str
@@ -103,14 +119,56 @@ class Settings:
     openclaw_timeout_seconds: int
 
 
-def _pick_default_data_dir(repo_root: Path) -> Path:
-    preferred = repo_root / ".jetlinks-ai"
+def _copy_if_missing(src: Path, dst: Path) -> None:
+    if not src.exists() or dst.exists():
+        return
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+
+
+
+def _copy_tree_if_missing(src: Path, dst: Path) -> None:
+    if not src.exists() or dst.exists():
+        return
+    shutil.copytree(src, dst)
+
+
+
+def _maybe_migrate_legacy_runtime(repo_root: Path) -> None:
+    primary = repo_root / ".jetlinks-ai"
     legacy = repo_root / ".aistaff"
-    if preferred.exists():
-        return preferred
-    if legacy.exists():
+    primary_db = primary / "jetlinks_ai.db"
+    legacy_db = legacy / "aistaff.db"
+
+    if primary_db.exists() or not legacy_db.exists():
+        return
+
+    primary.mkdir(parents=True, exist_ok=True)
+    _copy_if_missing(legacy_db, primary_db)
+    _copy_if_missing(legacy / "jwt_secret", primary / "jwt_secret")
+    _copy_if_missing(legacy / "shared_invite_token", primary / "shared_invite_token")
+    _copy_if_missing(legacy / "chatbi_demo.db", primary / "chatbi_demo.db")
+
+    for name in ["outputs", "history_sessions", "tasks", "pi", "nanobot-home"]:
+        _copy_tree_if_missing(legacy / name, primary / name)
+
+    if primary_db.exists():
+        print(f"[jetlinks-ai] 已从旧目录迁移运行数据：{legacy} -> {primary}")
+
+
+
+def _pick_default_data_dir(repo_root: Path, *, allow_migrate: bool = True) -> Path:
+    primary = repo_root / ".jetlinks-ai"
+    legacy = repo_root / ".aistaff"
+
+    if allow_migrate:
+        _maybe_migrate_legacy_runtime(repo_root)
+
+    if (primary / "jetlinks_ai.db").exists():
+        return primary
+    if (legacy / "aistaff.db").exists():
         return legacy
-    return preferred
+    return primary
 
 
 def load_settings() -> Settings:
@@ -131,14 +189,20 @@ def load_settings() -> Settings:
         projects_roots = [workspace_root]
 
     data_dir_raw = env_str("DATA_DIR", None)
-    data_dir = Path(data_dir_raw).expanduser().resolve() if data_dir_raw else _pick_default_data_dir(repo_root).resolve()
+    explicit_db_path = env_str("DB_PATH", None)
+    explicit_outputs_dir = env_str("OUTPUTS_DIR", None)
+    allow_runtime_migrate = not explicit_db_path and not explicit_outputs_dir
+    data_dir = (
+        Path(data_dir_raw).expanduser().resolve()
+        if data_dir_raw
+        else _pick_default_data_dir(repo_root, allow_migrate=allow_runtime_migrate).resolve()
+    )
     data_dir.mkdir(parents=True, exist_ok=True)
     outputs_dir = Path(env_str("OUTPUTS_DIR", str(data_dir / "outputs")) or str(data_dir / "outputs")).resolve()
 
     db_url = (env_str("DB_URL", "") or "").strip() or None
-    default_db_path = data_dir / "jetlinks_ai.db"
-    if data_dir.name == ".aistaff" and (data_dir / "aistaff.db").exists() and not default_db_path.exists():
-        default_db_path = data_dir / "aistaff.db"
+    default_db_filename = "aistaff.db" if data_dir.name == ".aistaff" else "jetlinks_ai.db"
+    default_db_path = data_dir / default_db_filename
     db_path = Path(env_str("DB_PATH", str(default_db_path)) or str(default_db_path)).resolve()
 
     jwt_secret = env_str("JWT_SECRET", None)
@@ -171,6 +235,16 @@ def load_settings() -> Settings:
     ]
 
     public_base_url = (env_str("PUBLIC_BASE_URL", "") or "").strip().rstrip("/")
+    public_demo_route = (env_str("PUBLIC_DEMO_ROUTE", "/demo") or "/demo").strip()
+    if not public_demo_route.startswith("/"):
+        public_demo_route = f"/{public_demo_route}"
+    public_demo_route = "/" + public_demo_route.strip().strip("/")
+    if public_demo_route == "/":
+        public_demo_route = "/demo"
+    public_demo_audit_log_path = Path(
+        env_str("PUBLIC_DEMO_AUDIT_LOG_PATH", str(data_dir / "logs" / "public_demo_audit.jsonl"))
+        or str(data_dir / "logs" / "public_demo_audit.jsonl")
+    ).expanduser().resolve()
     super_emails_raw = env_str("SUPER_EMAILS", "") or ""
     super_emails = frozenset(
         email.strip().lower() for email in super_emails_raw.split(",") if email.strip()
@@ -195,6 +269,21 @@ def load_settings() -> Settings:
         glm_model=env_str("GLM_MODEL", "glm-4.5") or "glm-4.5",
         glm_image_model=env_str("GLM_IMAGE_MODEL", "cogview-3-flash") or "cogview-3-flash",
         public_base_url=public_base_url,
+        public_demo_enabled=env_bool("PUBLIC_DEMO_ENABLED", False),
+        public_demo_route=public_demo_route,
+        public_demo_team_name=env_str("PUBLIC_DEMO_TEAM_NAME", "公开演示团队") or "公开演示团队",
+        public_demo_user_email=env_str("PUBLIC_DEMO_USER_EMAIL", "demo@jetlinks.local") or "demo@jetlinks.local",
+        public_demo_user_name=env_str("PUBLIC_DEMO_USER_NAME", "Demo Visitor") or "Demo Visitor",
+        public_demo_auth_window_seconds=env_int("PUBLIC_DEMO_AUTH_WINDOW_SECONDS", 300),
+        public_demo_auth_max_requests=env_int("PUBLIC_DEMO_AUTH_MAX_REQUESTS", 20),
+        public_demo_write_window_seconds=env_int("PUBLIC_DEMO_WRITE_WINDOW_SECONDS", 300),
+        public_demo_write_max_requests=env_int("PUBLIC_DEMO_WRITE_MAX_REQUESTS", 30),
+        public_demo_upload_window_seconds=env_int("PUBLIC_DEMO_UPLOAD_WINDOW_SECONDS", 600),
+        public_demo_upload_max_requests=env_int("PUBLIC_DEMO_UPLOAD_MAX_REQUESTS", 12),
+        public_demo_pipeline_window_seconds=env_int("PUBLIC_DEMO_PIPELINE_WINDOW_SECONDS", 600),
+        public_demo_pipeline_max_requests=env_int("PUBLIC_DEMO_PIPELINE_MAX_REQUESTS", 12),
+        public_demo_audit_enabled=env_bool("PUBLIC_DEMO_AUDIT_ENABLED", True),
+        public_demo_audit_log_path=public_demo_audit_log_path,
         workspace_root=workspace_root,
         projects_roots=projects_roots,
         workspace_layout=workspace_layout,

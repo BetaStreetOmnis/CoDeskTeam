@@ -23,6 +23,7 @@ class TokenData:
     email: str
     team_id: int
     team_role: str
+    is_public_demo: bool = False
 
 
 def hash_password(password: str) -> str:
@@ -45,7 +46,7 @@ def _decode(settings: Settings, token: str) -> dict[str, Any]:
     return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
 
 
-def create_access_token(*, settings: Settings, user_id: int, email: str, team_id: int, team_role: str) -> str:
+def create_access_token(*, settings: Settings, user_id: int, email: str, team_id: int, team_role: str, public_demo: bool = False) -> str:
     now = datetime.now(tz=UTC)
     exp = now + timedelta(minutes=settings.jwt_exp_minutes)
     payload: dict[str, Any] = {
@@ -54,6 +55,7 @@ def create_access_token(*, settings: Settings, user_id: int, email: str, team_id
         "email": email,
         "tid": int(team_id),
         "trole": team_role,
+        "pdm": bool(public_demo),
         "iat": int(now.timestamp()),
         "exp": int(exp.timestamp()),
     }
@@ -74,7 +76,13 @@ def decode_access_token(*, settings: Settings, token: str) -> TokenData:
     if team_id is None:
         raise ValueError("invalid token team id")
     team_role = str(payload.get("trole") or "").strip() or "member"
-    return TokenData(user_id=int(sub), email=email, team_id=int(team_id), team_role=team_role)
+    return TokenData(
+        user_id=int(sub),
+        email=email,
+        team_id=int(team_id),
+        team_role=team_role,
+        is_public_demo=bool(payload.get("pdm")),
+    )
 
 
 def create_download_token(*, settings: Settings, file_id: str, expires_minutes: int = 7 * 24 * 60) -> str:

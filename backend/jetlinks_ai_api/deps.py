@@ -22,6 +22,8 @@ class CurrentUser:
     team_id: int
     team_name: str
     team_role: str
+    is_super_admin: bool = False
+    is_public_demo: bool = False
 
 
 def get_settings(request: Request) -> Settings:
@@ -64,7 +66,7 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=401, detail="用户不存在")
 
-    is_super = _is_super(settings, str(user.get("email") or ""))
+    is_super = False if data.is_public_demo else _is_super(settings, str(user.get("email") or ""))
 
     mem_row = await fetchone(
         db,
@@ -93,6 +95,8 @@ async def get_current_user(
         team_id=int(mem["team_id"]),
         team_name=str(mem["team_name"]),
         team_role=str(mem["team_role"] or "member"),
+        is_super_admin=bool(is_super),
+        is_public_demo=bool(data.is_public_demo),
     )
 
 
@@ -114,7 +118,7 @@ async def get_optional_user(
     if not user:
         return None
 
-    is_super = _is_super(settings, str(user.get("email") or ""))
+    is_super = False if data.is_public_demo else _is_super(settings, str(user.get("email") or ""))
 
     mem_row = await fetchone(
         db,
@@ -143,6 +147,8 @@ async def get_optional_user(
         team_id=int(mem["team_id"]),
         team_name=str(mem["team_name"]),
         team_role=str(mem["team_role"] or "member"),
+        is_super_admin=bool(is_super),
+        is_public_demo=bool(data.is_public_demo),
     )
 
 
