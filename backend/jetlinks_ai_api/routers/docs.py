@@ -76,6 +76,16 @@ class PptRequest(BaseModel):
     template_content_indices: list[int] | None = Field(default=None, description="可选：模板内容页索引（1-based，例如 [3,5,7]）")
 
 
+class PosterRequest(BaseModel):
+    title: str = Field(min_length=1)
+    subtitle: str | None = None
+    bullets: list[str] = Field(default_factory=list)
+    footer: str | None = None
+    theme: str | None = Field(default="aurora", description="海报主题：aurora/sunset/forest")
+    width: int = Field(default=1600, ge=800, le=4000)
+    height: int = Field(default=2400, ge=1200, le=6000)
+
+
 class QuoteItem(BaseModel):
     name: str = Field(min_length=1)
     # Allow 0 as a placeholder when user doesn't provide quantity yet.
@@ -209,6 +219,50 @@ async def create_ppt(
                 payload=req.model_dump(),
                 meta=file_meta,
                 source="/api/docs/ppt",
+            )
+            file_meta.update(workspace_meta)
+        except Exception:
+            pass
+        return file_meta
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/docs/poster")
+async def create_poster(
+    req: PosterRequest,
+    project_id: int | None = Query(default=None),
+    user=Depends(get_current_user),  # noqa: ANN001
+    settings=Depends(get_settings),  # noqa: ANN001
+    db=Depends(get_db),  # noqa: ANN001
+) -> dict:
+    service = DocService(settings)
+    try:
+        file_meta = await service.create_poster_svg(
+            title=req.title,
+            subtitle=req.subtitle,
+            bullets=req.bullets,
+            footer=req.footer,
+            theme=req.theme,
+            width=req.width,
+            height=req.height,
+        )
+        try:
+            workspace_root = await _resolve_workspace_root(
+                project_id=project_id,
+                user=user,
+                settings=settings,
+                db=db,
+            )
+            workspace_meta = save_output_to_workspace(
+                settings=settings,
+                workspace_root=workspace_root,
+                file_id=str(file_meta.get("file_id") or ""),
+                title=req.title,
+                kind="svg",
+                payload=req.model_dump(),
+                meta=file_meta,
+                source="/api/docs/poster",
             )
             file_meta.update(workspace_meta)
         except Exception:

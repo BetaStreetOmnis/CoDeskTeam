@@ -28,6 +28,7 @@ class OpenClawStatusResponse(BaseModel):
     probe: dict[str, Any]
     channels_count: int = 0
     plugins_count: int = 0
+    skills_count: int = 0
 
 
 class OpenClawChannelItem(BaseModel):
@@ -72,9 +73,31 @@ class UpsertOpenClawPluginRequest(BaseModel):
     meta_json: dict[str, Any] = Field(default_factory=dict)
 
 
+class OpenClawSkillItem(BaseModel):
+    id: int
+    team_id: int
+    skill_key: str
+    name: str
+    description: str
+    entrypoint: str
+    enabled: bool
+    meta_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+    updated_at: str
+
+
+class UpsertOpenClawSkillRequest(BaseModel):
+    name: str = ""
+    description: str = ""
+    entrypoint: str = ""
+    enabled: bool = True
+    meta_json: dict[str, Any] = Field(default_factory=dict)
+
+
 class OpenClawSyncResponse(BaseModel):
     channels_upserted: int
     plugins_upserted: int
+    skills_upserted: int
 
 
 def _safe_json_load(value: object) -> dict[str, Any]:
@@ -109,8 +132,14 @@ async def get_team_openclaw_status(
         "SELECT COUNT(1) AS c FROM openclaw_plugins WHERE team_id = ?",
         (int(user.team_id),),
     )
+    row_skills = await fetchone(
+        db,
+        "SELECT COUNT(1) AS c FROM openclaw_skills WHERE team_id = ?",
+        (int(user.team_id),),
+    )
     channels_count = int((row_to_dict(row_channels) or {}).get("c") or 0)
     plugins_count = int((row_to_dict(row_plugins) or {}).get("c") or 0)
+    skills_count = int((row_to_dict(row_skills) or {}).get("c") or 0)
     return OpenClawStatusResponse(
         enabled=bool(status.get("enabled")),
         embedded=bool(status.get("embedded")),
@@ -125,6 +154,7 @@ async def get_team_openclaw_status(
         probe=status.get("probe") if isinstance(status.get("probe"), dict) else {},
         channels_count=channels_count,
         plugins_count=plugins_count,
+        skills_count=skills_count,
     )
 
 
@@ -138,9 +168,11 @@ async def sync_team_openclaw(
     svc = OpenClawAdminService(settings)
     channels = await svc.discover_channels()
     plugins = await svc.discover_plugins()
+    skills = await svc.discover_skills()
     now = utc_now_iso()
     upsert_channels = 0
     upsert_plugins = 0
+    upsert_skills = 0
 
     for c in channels:
         key = str(c.get("channel_key") or "").strip()
@@ -204,8 +236,39 @@ async def sync_team_openclaw(
         )
         upsert_plugins += 1
 
+    for sk in skills:
+        key = str(sk.get("skill_key") or "").strip()
+        if not key:
+            continue
+        await db.execute(
+            """
+            INSERT INTO openclaw_skills(
+              team_id, skill_key, name, description, entrypoint, enabled, meta_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(team_id, skill_key) DO UPDATE SET
+              name = excluded.name,
+              description = excluded.description,
+              entrypoint = excluded.entrypoint,
+              enabled = excluded.enabled,
+              meta_json = excluded.meta_json,
+              updated_at = excluded.updated_at
+            """,
+            (
+                int(user.team_id),
+                key,
+                str(sk.get("name") or key).strip() or key,
+                str(sk.get("description") or "").strip(),
+                str(sk.get("entrypoint") or "").strip(),
+                1 if bool(sk.get("enabled", True)) else 0,
+                json.dumps(sk.get("meta") if isinstance(sk.get("meta"), dict) else {}, ensure_ascii=False),
+                now,
+                now,
+            ),
+        )
+        upsert_skills += 1
+
     await db.commit()
-    return OpenClawSyncResponse(channels_upserted=upsert_channels, plugins_upserted=upsert_plugins)
+    return OpenClawSyncResponse(channels_upserted=upsert_channels, plugins_upserted=upsert_plugins, skills_upserted=upsert_skills)
 
 
 @router.get("/team/openclaw/channels", response_model=list[OpenClawChannelItem])
@@ -440,3 +503,119 @@ async def delete_team_openclaw_plugin(
     await db.commit()
     return {"ok": True}
 
+
+
+@router.get("/team/openclaw/skills", response_model=list[OpenClawSkillItem])
+async def list_team_openclaw_skills(
+    user: CurrentUser = Depends(get_current_user),
+    db=Depends(get_db),  # noqa: ANN001
+) -> list[OpenClawSkillItem]:
+    require_team_admin(user)
+    rows = await fetchall(
+        db,
+        """
+        SELECT id, team_id, skill_key, name, description, entrypoint, enabled, meta_json, created_at, updated_at
+        FROM openclaw_skills
+        WHERE team_id = ?
+        ORDER BY skill_key ASC
+        """,
+        (int(user.team_id),),
+    )
+    out: list[OpenClawSkillItem] = []
+    for item in rows_to_dicts(list(rows)):
+        out.append(
+            OpenClawSkillItem(
+                id=int(item.get("id") or 0),
+                team_id=int(item.get("team_id") or 0),
+                skill_key=str(item.get("skill_key") or ""),
+                name=str(item.get("name") or ""),
+                description=str(item.get("description") or ""),
+                entrypoint=str(item.get("entrypoint") or ""),
+                enabled=bool(item.get("enabled")),
+                meta_json=_safe_json_load(item.get("meta_json")),
+                created_at=str(item.get("created_at") or ""),
+                updated_at=str(item.get("updated_at") or ""),
+            )
+        )
+    return out
+
+
+@router.put("/team/openclaw/skills/{skill_key}", response_model=OpenClawSkillItem)
+async def upsert_team_openclaw_skill(
+    skill_key: str,
+    req: UpsertOpenClawSkillRequest,
+    user: CurrentUser = Depends(get_current_user),
+    db=Depends(get_db),  # noqa: ANN001
+) -> OpenClawSkillItem:
+    require_team_admin(user)
+    key = (skill_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="skill_key 不能为空")
+    now = utc_now_iso()
+    await db.execute(
+        """
+        INSERT INTO openclaw_skills(
+          team_id, skill_key, name, description, entrypoint, enabled, meta_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(team_id, skill_key) DO UPDATE SET
+          name = excluded.name,
+          description = excluded.description,
+          entrypoint = excluded.entrypoint,
+          enabled = excluded.enabled,
+          meta_json = excluded.meta_json,
+          updated_at = excluded.updated_at
+        """,
+        (
+            int(user.team_id),
+            key,
+            str(req.name or key).strip() or key,
+            str(req.description or "").strip(),
+            str(req.entrypoint or "").strip(),
+            1 if req.enabled else 0,
+            json.dumps(req.meta_json or {}, ensure_ascii=False),
+            now,
+            now,
+        ),
+    )
+    await db.commit()
+
+    row = await fetchone(
+        db,
+        """
+        SELECT id, team_id, skill_key, name, description, entrypoint, enabled, meta_json, created_at, updated_at
+        FROM openclaw_skills
+        WHERE team_id = ? AND skill_key = ?
+        """,
+        (int(user.team_id), key),
+    )
+    data = row_to_dict(row) or {}
+    return OpenClawSkillItem(
+        id=int(data.get("id") or 0),
+        team_id=int(data.get("team_id") or 0),
+        skill_key=str(data.get("skill_key") or ""),
+        name=str(data.get("name") or ""),
+        description=str(data.get("description") or ""),
+        entrypoint=str(data.get("entrypoint") or ""),
+        enabled=bool(data.get("enabled")),
+        meta_json=_safe_json_load(data.get("meta_json")),
+        created_at=str(data.get("created_at") or ""),
+        updated_at=str(data.get("updated_at") or ""),
+    )
+
+
+@router.delete("/team/openclaw/skills/{skill_key}")
+async def delete_team_openclaw_skill(
+    skill_key: str,
+    user: CurrentUser = Depends(get_current_user),
+    db=Depends(get_db),  # noqa: ANN001
+) -> dict[str, bool]:
+    require_team_admin(user)
+    key = (skill_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="skill_key 不能为空")
+    await db.execute(
+        "DELETE FROM openclaw_skills WHERE team_id = ? AND skill_key = ?",
+        (int(user.team_id), key),
+    )
+    await db.commit()
+    return {"ok": True}

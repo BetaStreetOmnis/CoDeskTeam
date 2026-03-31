@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..config import Settings
-from .docs import InspectionDocService, PptDocService, QuoteDocService
+from .docs import InspectionDocService, PosterDocService, PptDocService, QuoteDocService
 
 
 class DocService:
@@ -18,6 +18,7 @@ class DocService:
         self._ppt = PptDocService(settings)
         self._quote = QuoteDocService(settings)
         self._inspection = InspectionDocService(settings)
+        self._poster = PosterDocService(settings)
 
     async def create_pptx(
         self,
@@ -124,4 +125,25 @@ class DocService:
             conclusion=conclusion,
             signatures=signatures,
             attachments=attachments,
+        )
+
+    async def create_poster_svg(
+        self,
+        *,
+        title: str,
+        subtitle: str | None = None,
+        bullets: list[str] | None = None,
+        footer: str | None = None,
+        theme: str | None = None,
+        width: int = 1600,
+        height: int = 2400,
+    ) -> dict:
+        return await self._poster.create_poster_svg(
+            title=title,
+            subtitle=subtitle,
+            bullets=bullets,
+            footer=footer,
+            theme=theme,
+            width=width,
+            height=height,
         )

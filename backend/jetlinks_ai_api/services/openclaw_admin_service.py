@@ -174,6 +174,39 @@ class OpenClawAdminService:
             )
         return out
 
+    async def discover_skills(self) -> list[dict[str, Any]]:
+        raw = await self._run_json(["skills", "list", "--json"])
+        if raw is None:
+            raw = await self._run_json(["config", "get", "skills", "--json"])
+
+        if isinstance(raw, list):
+            items = raw
+        elif isinstance(raw, dict):
+            items = raw.get("skills") if isinstance(raw.get("skills"), list) else raw.get("items")
+            if not isinstance(items, list):
+                items = []
+        else:
+            items = []
+
+        out: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("id") or item.get("key") or item.get("name") or "").strip()
+            if not key:
+                continue
+            out.append(
+                {
+                    "skill_key": key,
+                    "name": str(item.get("name") or key).strip() or key,
+                    "description": str(item.get("description") or item.get("summary") or "").strip(),
+                    "entrypoint": str(item.get("entrypoint") or item.get("path") or item.get("command") or "").strip(),
+                    "enabled": bool(item.get("enabled", True)),
+                    "meta": item,
+                }
+            )
+        return out
+
     async def discover_channels(self) -> list[dict[str, Any]]:
         raw = await self._run_json(["config", "get", "channels", "--json"])
         if not isinstance(raw, dict):

@@ -675,6 +675,22 @@ async def init_db(settings: Settings) -> None:
                   FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
                 )
                 """,
+                """
+                CREATE TABLE IF NOT EXISTS openclaw_skills (
+                  id BIGSERIAL PRIMARY KEY,
+                  team_id BIGINT NOT NULL,
+                  skill_key TEXT NOT NULL,
+                  name TEXT NOT NULL DEFAULT '',
+                  description TEXT NOT NULL DEFAULT '',
+                  entrypoint TEXT NOT NULL DEFAULT '',
+                  enabled INTEGER NOT NULL DEFAULT 1,
+                  meta_json TEXT NOT NULL DEFAULT '{}',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE(team_id, skill_key),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                )
+                """,
                 "CREATE INDEX IF NOT EXISTS idx_team_skills_team_id ON team_skills(team_id)",
                 "CREATE INDEX IF NOT EXISTS idx_memberships_team_id ON memberships(team_id)",
                 "CREATE INDEX IF NOT EXISTS idx_invites_team_id ON invites(team_id)",
@@ -697,6 +713,7 @@ async def init_db(settings: Settings) -> None:
                 "CREATE INDEX IF NOT EXISTS idx_openclaw_sessions_team_chat ON openclaw_sessions(team_id, chat_session_id)",
                 "CREATE INDEX IF NOT EXISTS idx_openclaw_channels_team ON openclaw_channels(team_id)",
                 "CREATE INDEX IF NOT EXISTS idx_openclaw_plugins_team ON openclaw_plugins(team_id)",
+                "CREATE INDEX IF NOT EXISTS idx_openclaw_skills_team ON openclaw_skills(team_id)",
             ]
             for stmt in statements:
                 await db.execute(stmt)
@@ -981,6 +998,21 @@ async def init_db(settings: Settings) -> None:
                   FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS openclaw_skills (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  skill_key TEXT NOT NULL,
+                  name TEXT NOT NULL DEFAULT '',
+                  description TEXT NOT NULL DEFAULT '',
+                  entrypoint TEXT NOT NULL DEFAULT '',
+                  enabled INTEGER NOT NULL DEFAULT 1,
+                  meta_json TEXT NOT NULL DEFAULT '{}',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE(team_id, skill_key),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_team_skills_team_id ON team_skills(team_id);
                 CREATE INDEX IF NOT EXISTS idx_memberships_team_id ON memberships(team_id);
                 CREATE INDEX IF NOT EXISTS idx_invites_team_id ON invites(team_id);
@@ -1004,6 +1036,7 @@ async def init_db(settings: Settings) -> None:
                 CREATE INDEX IF NOT EXISTS idx_openclaw_sessions_team_chat ON openclaw_sessions(team_id, chat_session_id);
                 CREATE INDEX IF NOT EXISTS idx_openclaw_channels_team ON openclaw_channels(team_id);
                 CREATE INDEX IF NOT EXISTS idx_openclaw_plugins_team ON openclaw_plugins(team_id);
+                CREATE INDEX IF NOT EXISTS idx_openclaw_skills_team ON openclaw_skills(team_id);
                 """
             )
 
